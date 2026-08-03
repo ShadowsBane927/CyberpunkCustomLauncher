@@ -1,3 +1,4 @@
+#Mod made by Realbiquitous
 import os
 
 MENU = "assets/Menu_specific/Menu specific"
