@@ -1,27 +1,4 @@
-/* ============================================================================
-   PHASE 3 - DirectWrite text, ported one element at a time.
-
-   Same isolation approach as Phase 1/2: own file, own globals, called from
-   the Ctrl+D test paint path only, nothing in the working GDI+ path touched.
-
-   Element 1: MISSION text (quest string).
-
-   FONT LOADING - rewritten. The first attempt used IDWriteFactory5 +
-   IDWriteInMemoryFontFileLoader/IDWriteFontSetBuilder1 (the newer, "modern"
-   in-memory font API). Two rounds of Ctrl+D comparison against the GDI+
-   reference showed it rendering a generic fallback font both times (once
-   upright, once italic after a style-matching fix that should have
-   worked) - strong evidence the custom collection wasn't actually being
-   found/used at all, likely a vtable-layout or ABI issue with these newer
-   interfaces in this mingw-w64 version rather than anything about the font
-   file itself. Rewritten below using the classic pre-Windows-10 custom
-   loader pattern (base IDWriteFactory + hand-implemented
-   IDWriteFontFileLoader/IDWriteFontFileStream/IDWriteFontCollectionLoader/
-   IDWriteFontFileEnumerator) - much more mature, far more widely used and
-   documented, and much smaller surface for a silent COM mismatch since we
-   implement every method ourselves instead of trusting a newer factory
-   interface's internal behavior.
-   ============================================================================ */
+/* PHASE 3 - DirectWrite text, ported one element at a time. */
 #define COBJMACROS
 #define CINTERFACE
 #define INITGUID
@@ -31,7 +8,7 @@
 #include <d2d1.h>
 #include <dwrite.h>
 
-/* ---- mirrors of main-source layout/state ---- */
+/* ---- mirrors of main-source layout/state ----. */
 typedef struct { int x, y, w, h; double scale; } SV2LayoutMirror;
 extern SV2LayoutMirror SV2_GetLayout(int clientW, int clientH);
 extern int SV2_MapX(SV2LayoutMirror L, double nx);
@@ -59,45 +36,38 @@ extern double SV2_StatNumFontPx;
 #define SV2P3_MISSION_SHADOW_DX 8
 #define SV2P3_MISSION_SHADOW_DY 8
 
-/* DATE layout mirrors SV2_LayoutItems[SV2_LI_DATE] - {282, 516, 0, FALSE,
-   32, FALSE}: no rotation, no shadow pass, plain white text. */
+/* DATE layout mirrors SV2_LayoutItems[SV2_LI_DATE]. */
 #define SV2P3_DATE_CX 282.0
 #define SV2P3_DATE_CY 516.0
 #define SV2P3_DATE_FONTPX 32.0
 
-/* TITLE mirrors SV2_LayoutItems[SV2_LI_TITLE] - {255, 69, 12.0, TRUE, 18}. */
+/* TITLE mirrors SV2_LayoutItems[SV2_LI_TITLE]. */
 #define SV2P3_TITLE_CX 255.0
 #define SV2P3_TITLE_CY 69.0
 #define SV2P3_TITLE_ANGLE 12.0
-#define SV2P3_TITLE_FONTPX 18.0
+#define SV2P3_TITLE_FONTPX 26.0
 
-/* LIFEPATH mirrors SV2_LayoutItems[SV2_LI_LIFEPATH] - {376, 100, -13.0,
-   TRUE, 105}. */
+/* LIFEPATH mirrors SV2_LayoutItems[SV2_LI_LIFEPATH]. */
 #define SV2P3_LIFEPATH_CX 376.0
 #define SV2P3_LIFEPATH_CY 100.0
 #define SV2P3_LIFEPATH_ANGLE (-13.0)
 #define SV2P3_LIFEPATH_FONTPX 105.0
 
-/* TIME/LED mirror SV2_LayoutItems[SV2_LI_TIME]/[SV2_LI_LED] -
-   {68,550,-90.0,TRUE,133,TRUE} / {141,550,-90.0,TRUE,18,TRUE}. Band
-   top/bottom come from the live SV2_TimeTop/Bottom, SV2_LedTop/Bottom
-   globals (not constants - they're adjustable via the layout editor). */
+/* TIME/LED mirror SV2_LayoutItems[SV2_LI_TIME]/[SV2_LI_LED]. */
 #define SV2P3_TIME_CX 68.0
-#define SV2P3_TIME_FONTPX 133.0
+#define SV2P3_TIME_FONTPX 95.0
 #define SV2P3_LED_CX 141.0
 #define SV2P3_LED_FONTPX 18.0
 #define SV2P3_LED_SPEED_PX_PER_SEC 60.0
 
-/* LOCATION mirrors SV2_LayoutItems[SV2_LI_LOCATION] - {289,827,0,FALSE,44}. */
+/* LOCATION mirrors SV2_LayoutItems[SV2_LI_LOCATION]. */
 #define SV2P3_LOCATION_CX 289.0
 #define SV2P3_LOCATION_CY 827.0
 #define SV2P3_LOCATION_FONTPX 44.0
-/* "Westbrook - Charter Hill" (24 chars) renders at the base size above;
-   longer location strings scale down from there, shorter ones scale up. */
+/* "Westbrook - Charter Hill" (24 chars) renders at the base size above. */
 #define SV2P3_LOCATION_BASE_LEN 24.0
 
-/* LEVEL_NUM/CRED_NUM mirror SV2_LayoutItems[SV2_LI_LEVELNUM]/[SV2_LI_CREDNUM]
-   - {116,937,0,FALSE,138} / {337,937,0,FALSE,138}. */
+/* LEVEL_NUM/CRED_NUM mirror SV2_LayoutItems[SV2_LI_LEVELNUM]/[SV2_LI_CREDNUM]. */
 #define SV2P3_LEVELNUM_CX 116.0
 #define SV2P3_LEVELNUM_CY 937.0
 #define SV2P3_CREDNUM_CX 337.0
@@ -105,8 +75,8 @@ extern double SV2_StatNumFontPx;
 #define SV2P3_LEVELCREDNUM_FONTPX 138.0
 
 /* ------------------------------------------------------------------ */
-/* Embedded font data table - one entry per RCDATA font resource that  */
-/* should be visible to DirectWrite. Populated once at init.           */
+/* Embedded font data table. */
+/* should be visible to DirectWrite. */
 /* ------------------------------------------------------------------ */
 #define SV2_MAX_EMBEDDED_FONTS 8
 typedef struct { const void *data; UINT32 size; } SV2EmbeddedFontData;
@@ -140,9 +110,9 @@ static BOOL SV2_D2D_LoadEmbeddedFontResource(const char *resourceName) {
 }
 
 /* ------------------------------------------------------------------ */
-/* MemFontFileStream - wraps one already-in-memory font blob. The data */
-/* is a resource loaded via LockResource, which stays valid for the    */
-/* lifetime of the process, so no copying is needed.                   */
+/* MemFontFileStream. */
+/* is a resource loaded via LockResource, which stays valid for the. */
+/* lifetime of the process, so no copying is needed. */
 /* ------------------------------------------------------------------ */
 typedef struct {
     IDWriteFontFileStream base;
@@ -198,8 +168,8 @@ static IDWriteFontFileStreamVtbl g_streamVtbl = {
 };
 
 /* ------------------------------------------------------------------ */
-/* MemFontFileLoader - single global instance. The "key" DirectWrite   */
-/* round-trips to us is a UINT32 index into g_embeddedFonts.           */
+/* MemFontFileLoader. */
+/* round-trips to us is a UINT32 index into g_embeddedFonts. */
 /* ------------------------------------------------------------------ */
 typedef struct { IDWriteFontFileLoader base; } MemFontFileLoader;
 
@@ -234,13 +204,13 @@ static IDWriteFontFileLoaderVtbl g_loaderVtbl = { MFL_QueryInterface, MFL_AddRef
 static MemFontFileLoader g_fontFileLoader = { { &g_loaderVtbl } };
 
 /* ------------------------------------------------------------------ */
-/* MemFontFileEnumerator - walks the full g_embeddedFonts table.       */
+/* MemFontFileEnumerator. */
 /* ------------------------------------------------------------------ */
 typedef struct {
     IDWriteFontFileEnumerator base;
     LONG refCount;
     IDWriteFactory *factory;
-    UINT32 currentIndex; /* starts "before first": UINT32_MAX so first MoveNext lands on 0 */
+    UINT32 currentIndex; /* starts "before first": UINT32_MAX so first MoveNext lands on 0. */
 } MemFontFileEnumerator;
 
 static HRESULT STDMETHODCALLTYPE MFE_QueryInterface(IDWriteFontFileEnumerator *This, REFIID riid, void **ppv) {
@@ -283,7 +253,7 @@ static HRESULT STDMETHODCALLTYPE MFE_GetCurrentFontFile(IDWriteFontFileEnumerato
 static IDWriteFontFileEnumeratorVtbl g_enumVtbl = { MFE_QueryInterface, MFE_AddRef, MFE_Release, MFE_MoveNext, MFE_GetCurrentFontFile };
 
 /* ------------------------------------------------------------------ */
-/* MemFontCollectionLoader - single global instance.                   */
+/* MemFontCollectionLoader. */
 /* ------------------------------------------------------------------ */
 typedef struct { IDWriteFontCollectionLoader base; } MemFontCollectionLoader;
 
@@ -315,7 +285,7 @@ static IDWriteFontCollectionLoaderVtbl g_collectionLoaderVtbl = { MCL_QueryInter
 static MemFontCollectionLoader g_fontCollectionLoader = { { &g_collectionLoaderVtbl } };
 
 /* ------------------------------------------------------------------ */
-/* Top-level init / draw                                               */
+/* Top-level init / draw. */
 /* ------------------------------------------------------------------ */
 static IDWriteFactory *g_dwriteFactory = NULL;
 static IDWriteFontCollection *g_customFontCollection = NULL;
@@ -324,7 +294,7 @@ static float g_missionFormatSizePx = -1.0f;
 static ID2D1SolidColorBrush *g_brushBlack = NULL;
 static ID2D1SolidColorBrush *g_brushRed = NULL;
 static ID2D1SolidColorBrush *g_brushWhite = NULL;
-static ID2D1SolidColorBrush *g_brushStatDark = NULL; /* RGB(20,20,20) - unhovered stat number color */
+static ID2D1SolidColorBrush *g_brushStatDark = NULL; /* RGB(20,20,20) - unhovered stat number color. */
 static ID2D1RenderTarget *g_brushOwnerRT = NULL;
 
 static BOOL SV2_D2D_Text_Init(void) {
@@ -367,9 +337,7 @@ static BOOL SV2_D2D_Text_Init(void) {
             return FALSE;
         }
 
-        /* Log what actually landed in the collection so a mismatch shows
-           up in debug_log.txt instead of only as a wrong-looking font on
-           screen. */
+        /* Log what actually landed in the collection so a mismatch shows up in debug_log.txt. */
         UINT32 famCount = IDWriteFontCollection_GetFontFamilyCount(g_customFontCollection);
         char msg[100];
         snprintf(msg, sizeof(msg), "[d2d-text] custom collection created with %u font famil%s", (unsigned)famCount, famCount == 1 ? "y" : "ies");
@@ -419,8 +387,7 @@ static IDWriteTextFormat *SV2_D2D_CreateFormat(const wchar_t *family, DWRITE_FON
     return fmt;
 }
 
-/* Mission/date/location text uses "Emblema One", the app's primary
-   display font. */
+/* Mission/date/location text uses "Emblema One", the app's primary display font. */
 static IDWriteTextFormat *SV2_D2D_CreatePrimaryFormat(float sizePx, const char *logTag) {
     return SV2_D2D_CreateFormat(L"Emblema One", DWRITE_FONT_STYLE_NORMAL, sizePx, logTag);
 }
@@ -463,12 +430,7 @@ static IDWriteTextFormat *SV2_D2D_GetDisplayFormat(float sizePx) {
     return g_broadwayFormat;
 }
 
-/* "Bodoni MT" (stat numbers) is NOT one of this app's 5 embedded fonts -
-   it's system-installed only, same situation Digital-7 was in before
-   being embedded directly. Pulled from the system collection (NULL
-   collection arg) with a fallback to the custom "Emblema One" family
-   + a debug_log.txt line if it isn't installed, so it's never silently
-   missing - same pattern as the original Digital-7 handling. */
+/* "Bodoni MT" (stat numbers) is NOT one of this app's 5 embedded fonts. */
 static IDWriteTextFormat *g_bodoniFormat = NULL;
 static float g_bodoniFormatSizePx = -1.0f;
 static IDWriteTextFormat *SV2_D2D_GetBodoniFormat(float sizePx) {
@@ -478,7 +440,7 @@ static IDWriteTextFormat *SV2_D2D_GetBodoniFormat(float sizePx) {
 
     IDWriteTextFormat *fmt = NULL;
     HRESULT hr = IDWriteFactory_CreateTextFormat(g_dwriteFactory, L"Bodoni MT",
-        NULL, /* NULL collection = search the system collection */
+        NULL, /* NULL collection = search the system collection. */
         DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
         sizePx, L"en-us", &fmt);
     if (FAILED(hr) || !fmt) {
@@ -519,9 +481,7 @@ static IDWriteTextFormat *SV2_D2D_CreateDigital7Format(float sizePx, const char 
     extern void AppendStatus(const char *);
     IDWriteTextFormat *fmt = SV2_D2D_CreateFormat(L"DSEG7 Classic", DWRITE_FONT_STYLE_NORMAL, sizePx, logTag);
     if (!fmt) {
-        /* Shouldn't happen now that digital-7.ttf is embedded (family
-           name confirmed via its own name table), but fall back rather
-           than draw nothing if something's gone wrong with the embed. */
+        /* Shouldn't happen now that digital-7.ttf is embedded (family name confirmed via its own name table) */
         char msg[100];
         snprintf(msg, sizeof(msg), "[d2d-text] 'Digital-7' lookup failed for %s - falling back to 'Emblema One'", logTag);
         AppendStatus(msg);
@@ -575,9 +535,7 @@ static void SV2_D2D_DrawMissionPass(ID2D1RenderTarget *rt, IDWriteTextFormat *fm
                                      const wchar_t *wtext, int len, float cx, float cy,
                                      float angleDeg, ID2D1SolidColorBrush *brush) {
     D2D1_MATRIX_3X2_F rot;
-    /* Sign flipped from the GDI escapement convention - matches the D2D
-       coordinate system correctly when compared against the GDI+
-       reference rendering. */
+    /* Sign flipped from the GDI escapement convention. */
     D2D1MakeRotateMatrix(-(FLOAT)angleDeg, (D2D1_POINT_2F){ cx, cy }, &rot);
     ID2D1RenderTarget_SetTransform(rt, &rot);
 
@@ -593,8 +551,7 @@ static void SV2_D2D_DrawMissionPass(ID2D1RenderTarget *rt, IDWriteTextFormat *fm
     ID2D1RenderTarget_SetTransform(rt, &identity);
 }
 
-/* DATE has no rotation and no shadow pass, so this skips the transform
-   dance entirely - just a straight centered DrawText. */
+/* DATE has no rotation and no shadow pass, so this skips the transform dance entirely. */
 static void SV2_D2D_DrawPlainCentered(ID2D1RenderTarget *rt, IDWriteTextFormat *fmt,
                                        const wchar_t *wtext, int len, float cx, float cy,
                                        ID2D1SolidColorBrush *brush) {
@@ -607,9 +564,7 @@ static void SV2_D2D_DrawPlainCentered(ID2D1RenderTarget *rt, IDWriteTextFormat *
         D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
 }
 
-/* Measures a string's natural (unrotated) width/height in DIPs under a
-   given format - used to size TIME's clip band and LED's wrap-unit length,
-   mirroring GetTextExtentPoint32A in the GDI+ path. */
+/* Measures a string's natural (unrotated) width/height in DIPs under a given format. */
 static void SV2_D2D_MeasureText(IDWriteTextFormat *fmt, const wchar_t *wtext, int len, float *outW, float *outH) {
     *outW = 0.0f; *outH = 0.0f;
     IDWriteTextLayout *layout = NULL;
@@ -623,11 +578,7 @@ static void SV2_D2D_MeasureText(IDWriteTextFormat *fmt, const wchar_t *wtext, in
     IDWriteTextLayout_Release(layout);
 }
 
-/* TIME/LED: rotated text drawn inside an axis-aligned screen-space clip
-   band. The clip must be pushed BEFORE the rotation transform is set (so
-   it stays axis-aligned in screen space, matching GDI's SelectClipRgn
-   behavior, which clips in device pixels regardless of what's drawn
-   inside it) and popped after the transform is reset back to identity. */
+/* TIME/LED: rotated text drawn inside an axis-aligned screen-space clip band. */
 static void SV2_D2D_DrawRotatedClipped(ID2D1RenderTarget *rt, IDWriteTextFormat *fmt,
                                         const wchar_t *wtext, int len, float cx, float cy,
                                         float angleDeg, ID2D1SolidColorBrush *brush,
@@ -652,17 +603,7 @@ static void SV2_D2D_DrawRotatedClipped(ID2D1RenderTarget *rt, IDWriteTextFormat 
     ID2D1RenderTarget_PopAxisAlignedClip(rt);
 }
 
-/* Same as above, but the caller supplies the exact left edge to start the
-   text at (format must be set to DWRITE_TEXT_ALIGNMENT_LEADING +
-   DWRITE_WORD_WRAPPING_NO_WRAP) instead of letting DirectWrite center the
-   string automatically. Needed for LED: centering a VERY long repeated
-   string ("SAVED " x many) relies on DirectWrite's own measurement of the
-   full concatenated string, which can differ slightly from N times a
-   single unit's measured width (inter-repetition kerning), and that drift
-   compounds across many repetitions - enough to visibly desync the two
-   overlap-prevention copies. Anchoring both copies at an explicitly
-   computed left edge instead removes that whole class of drift, since
-   both copies then start from a position this code fully controls. */
+/* Same as above, but the caller supplies the exact left edge to start the text at. */
 
 
 void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
@@ -694,8 +635,7 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* DATE - no rotation, no shadow, plain white, reuses the same custom
-       font collection/family as mission (just a different cached size). */
+    /* DATE - no rotation, no shadow, plain white, reuses the same custom font collection/family. */
     if (SV2_g_dateOnly[0] && g_brushWhite) {
         float dateFontPx = (float)(SV2P3_DATE_FONTPX * L.scale);
         if (dateFontPx < 6.0f) dateFontPx = 6.0f;
@@ -711,16 +651,12 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
             }
         }
     }
-    /* LOCATION - beside the pin icon, no rotation, no shadow, plain
-       white, reuses the same Emblema One family as mission/date. Font size
-       scales inversely with character count so longer location names
-       shrink to fit and shorter ones grow to fill the space, calibrated
-       against "Westbrook - Charter Hill" as the size that looks right. */
+    /* LOCATION - beside the pin icon, no rotation, no shadow, plain white, reuses the same. */
     if (SV2_g_location[0] && g_brushWhite) {
         int textLen = (int)strlen(SV2_g_location);
         float lenScale = textLen > 0 ? (float)(SV2P3_LOCATION_BASE_LEN / textLen) : 1.0f;
-        if (lenScale > 1.8f) lenScale = 1.8f;   /* don't blow up for very short names */
-        if (lenScale < 0.5f) lenScale = 0.5f;   /* don't shrink to unreadable for very long ones */
+        if (lenScale > 1.8f) lenScale = 1.8f;   /* don't blow up for very short names. */
+        if (lenScale < 0.5f) lenScale = 0.5f;   /* don't shrink to unreadable for very long ones. */
 
         float locFontPx = (float)(SV2P3_LOCATION_FONTPX * L.scale * lenScale);
         if (locFontPx < 6.0f) locFontPx = 6.0f;
@@ -737,9 +673,7 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* LEVEL_NUM / CRED_NUM - plain white, "Limelight", only drawn when
-       that field isn't currently a real focused edit box (the getters
-       return NULL in that case, matching the GDI+ path's skip check). */
+    /* LEVEL_NUM / CRED_NUM. */
     if (g_brushWhite) {
         float lcFontPx = (float)(SV2P3_LEVELCREDNUM_FONTPX * L.scale);
         if (lcFontPx < 10.0f) lcFontPx = 10.0f;
@@ -768,9 +702,7 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* Per-glass STAT NUMBERS (up to 18) - plain text, "Bodoni MT", white
-       when that glass is currently hovered, dark gray otherwise. Same
-       skip-if-active-edit-box behavior as LEVEL_NUM/CRED_NUM. */
+    /* Per-glass STAT NUMBERS (up to 18). */
     {
         float statFontPx = (float)(SV2_StatNumFontPx * L.scale);
         if (statFontPx < 6.0f) statFontPx = 6.0f;
@@ -792,7 +724,7 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* TITLE (save name) - rotated, single white pass, "Engravers MT". */
+    /* TITLE (save name). */
     if (SV2_g_saveName[0] && g_brushWhite) {
         float titleFontPx = (float)(SV2P3_TITLE_FONTPX * L.scale);
         if (titleFontPx < 6.0f) titleFontPx = 6.0f;
@@ -809,9 +741,7 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* LIFEPATH - rotated, single white pass, "Red Menace", uppercased
-       (raw value is title-case; this stylized font's lowercase glyphs are
-       hard to read, and the reference art shows it in all caps). */
+    /* LIFEPATH - rotated, single white pass, "Red Menace", uppercased. */
     if (SV2_g_lifePath[0] && g_brushWhite) {
         char lifePathUpper[64];
         strncpy(lifePathUpper, SV2_g_lifePath, sizeof(lifePathUpper) - 1);
@@ -828,21 +758,13 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
                 llen -= 1;
                 float lcx = (float)SV2_MapX(L, SV2P3_LIFEPATH_CX);
                 float lcy = (float)SV2_MapY(L, SV2P3_LIFEPATH_CY);
-                /* Unlike mission/title/date (drawn via GDI's TextOut
-                   escapement in the original app), lifepath was drawn via
-                   a special GDI+ affine-matrix path (a font-rendering bug
-                   in the original design forced this workaround). That
-                   path's rotation direction runs opposite to GDI's
-                   escapement, so the angle is passed negated here to
-                   match - verified against the title text's rotation,
-                   which uses the un-negated convention correctly. */
+                /* Unlike mission/title/date (drawn via GDI's TextOut escapement in the original app),. */
                 SV2_D2D_DrawMissionPass(rt, lifeFmt, lwtext, llen, lcx, lcy, -(float)SV2P3_LIFEPATH_ANGLE, g_brushWhite);
             }
         }
     }
 
-    /* TIME - rotated -90, clipped to a band sized from the actual "00:00
-       pm" glyph metrics (not a fixed guess), same as the GDI+ path. */
+    /* TIME - rotated -90, clipped to a band sized from the actual "00:00 pm" glyph metrics (not a fixed guess) */
     if (SV2_g_timeOnly[0] && g_brushWhite) {
         float timeFontPx = (float)(SV2P3_TIME_FONTPX * L.scale);
         if (timeFontPx < 6.0f) timeFontPx = 6.0f;
@@ -868,37 +790,23 @@ void SV2_D2D_Phase3Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
     }
 
-    /* LED - infinite vertical scroll of "SAVED ", clipped to its own band.
-       Previous approach (two large repeated-text blocks, offset by a
-       computed wrap distance) went through three rounds of fixes and
-       still drifted out of phase - the underlying problem is that ANY
-       measurement of a long concatenated string can differ subtly from
-       "N times one unit's width" (DirectWrite kerning between repeated
-       units), and that error compounds. This rewrite sidesteps the whole
-       question: each "SAVED " unit is now drawn SEPARATELY, at a position
-       computed purely from array arithmetic (index * unitLen), so
-       adjacent units are guaranteed non-overlapping and evenly spaced by
-       construction - there's no "do two big blocks meet seamlessly"
-       computation left to get wrong. SV2_LedScrollY is still the shared
-       global the GDI+ path owns; wrapped here against a single unit's
-       length (a plain fmod) purely for float-precision hygiene over long
-       sessions, not for correctness of the tiling itself. */
+    /* LED - infinite vertical scroll of "SAVED ", clipped to its own band. */
     {
         float ledFontPx = (float)(SV2P3_LED_FONTPX * L.scale);
         if (ledFontPx < 6.0f) ledFontPx = 6.0f;
         IDWriteTextFormat *ledFmt = SV2_D2D_GetLedFormat(ledFontPx);
         if (ledFmt && g_brushWhite) {
             float unitW = 0, unitH = 0;
-            SV2_D2D_MeasureText(ledFmt, L"SAVED", 5, &unitW, &unitH); /* no trailing space - fixed spacing added below instead, keeps the measurement itself simple/stable */
+            SV2_D2D_MeasureText(ledFmt, L"SAVED", 5, &unitW, &unitH); /* no trailing space. */
             double unitLenScreen = unitW > 0 ? (double)unitW : 40.0;
-            double gapScreen = unitLenScreen * 0.15; /* a little breathing room between repeats, proportion of glyph width so it scales with font size */
+            double gapScreen = unitLenScreen * 0.15; /* a little breathing room between repeats, proportion of glyph width so it scales with font. */
             double strideScreen = unitLenScreen + gapScreen;
             double strideNative = strideScreen / L.scale;
 
-            if (strideNative < 1.0) strideNative = 1.0; /* guard against a degenerate/zero measurement */
+            if (strideNative < 1.0) strideNative = 1.0; /* guard against a degenerate/zero measurement. */
             double wrappedScroll = fmod(SV2_LedScrollY, strideNative);
             if (wrappedScroll < 0) wrappedScroll += strideNative;
-            SV2_LedScrollY = wrappedScroll; /* keeps the shared global bounded; GDI+'s own wrap (a whole multiple of this same unit) stays compatible */
+            SV2_LedScrollY = wrappedScroll; /* keeps the shared global bounded. */
 
             float bandTop = (float)SV2_MapY(L, SV2_LedTop);
             float bandBottom = (float)SV2_MapY(L, SV2_LedBottom);

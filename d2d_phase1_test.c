@@ -1,10 +1,4 @@
-/* ============================================================================
-   Direct2D save-editor renderer - the sole rendering path for the save
-   editor screen (the original GDI+ implementation has been removed).
-   Started as an isolated Phase 1 proof-of-concept behind a Ctrl+D toggle;
-   once every element was ported and confirmed, the toggle and the old
-   GDI+ path were both removed and this became the only renderer.
-   ============================================================================ */
+/* Direct2D save-editor renderer. */
 #define COBJMACROS
 #define CINTERFACE
 #include <windows.h>
@@ -16,7 +10,7 @@ static ID2D1HwndRenderTarget *g_d2dRT = NULL;
 static HWND g_d2dHwnd = NULL;
 
 BOOL SV2_D2D_Init(HWND hwnd) {
-    if (g_d2dRT && g_d2dHwnd == hwnd) return TRUE; /* already set up for this window */
+    if (g_d2dRT && g_d2dHwnd == hwnd) return TRUE; /* already set up for this window. */
 
     if (!g_d2dFactory) {
         HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
@@ -44,27 +38,14 @@ BOOL SV2_D2D_Init(HWND hwnd) {
     ZeroMemory(&hwndProps, sizeof(hwndProps));
     hwndProps.hwnd = hwnd;
     hwndProps.pixelSize = size;
-    /* RETAIN_CONTENTS keeps the back buffer's content between Present
-       calls instead of fully discarding/flushing every time. The default
-       (NONE) is a well-documented cause of visible flicker for native
-       child HWNDs - like the real edit-box controls - layered on top of
-       a D2D-rendered parent window under DWM composition, since every
-       Present can cause the compositor to briefly show the discarded/
-       stale buffer before the new frame lands - causing a visible flash
-       while a stat number is being edited, since the edit box is the one
-       thing actually sitting on top of the D2D surface at that moment. */
+    /* RETAIN_CONTENTS keeps the back buffer's content between Present calls instead of fully. */
     hwndProps.presentOptions = D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS;
 
     if (g_d2dRT) { ID2D1HwndRenderTarget_Release(g_d2dRT); g_d2dRT = NULL; }
 
     HRESULT hr = ID2D1Factory_CreateHwndRenderTarget(g_d2dFactory, &rtProps, &hwndProps, &g_d2dRT);
     if (SUCCEEDED(hr) && g_d2dRT) {
-        /* D2D render targets default to scaling DIPs by the system DPI
-           setting - since this app is already DPI-aware and all the
-           SV2_MapX/MapY coordinates are already exact physical pixels
-           (matching what GDI expects), that extra scaling was stacking on
-           top and upsizing everything. Pinning to 96 DPI makes D2D treat
-           1 DIP = 1 physical pixel, matching GDI's behavior exactly. */
+        /* D2D render targets default to scaling DIPs by the system DPI setting. */
         ID2D1RenderTarget_SetDpi((ID2D1RenderTarget *)g_d2dRT, 96.0f, 96.0f);
     }
     if (FAILED(hr)) {
@@ -81,12 +62,7 @@ BOOL SV2_D2D_Init(HWND hwnd) {
     return TRUE;
 }
 
-/* Shared frame lifecycle - both the save editor's paint path and the menu's
-   paint path use the SAME underlying D2D device/render target (they're the
-   same window, just different screens toggled by gViewMode), so the resize-
-   skip tracking below must be shared too rather than duplicated per screen -
-   otherwise switching screens right as the window resizes could cause a
-   double-resize or a missed one. */
+/* Shared frame lifecycle. */
 static D2D1_SIZE_U g_lastSize = { 0, 0 };
 
 ID2D1RenderTarget *SV2_D2D_BeginFrame(HWND hwnd) {
@@ -95,13 +71,7 @@ ID2D1RenderTarget *SV2_D2D_BeginFrame(HWND hwnd) {
     RECT rc;
     GetClientRect(hwnd, &rc);
     D2D1_SIZE_U size = { (UINT32)(rc.right - rc.left), (UINT32)(rc.bottom - rc.top) };
-    /* Resize() discards/resets the render target's contents - calling it
-       unconditionally on every paint (including the many rapid repaints
-       fired back-to-back while the mouse hovers/jitters near a glass
-       boundary) was doing that reset every single frame even when the
-       window hadn't actually resized, which was causing a visible flash/
-       shake during hover. Only call it when the size has genuinely
-       changed. */
+    /* Resize() discards/resets the render target's contents. */
     if (size.width != g_lastSize.width || size.height != g_lastSize.height) {
         ID2D1HwndRenderTarget_Resize(g_d2dRT, &size);
         g_lastSize = size;
@@ -148,19 +118,10 @@ void SV2_D2D_Shutdown(void) {
     g_d2dHwnd = NULL;
 }
 
-/* ============================================================================
-   PHASE 2 - static image compositing via D2D + WIC.
-
-   Loads real PNG resources (the same embedded RCDATA already used by the
-   GDI+ path) through WIC, converts to ID2D1Bitmap, and draws them with the
-   same native-canvas-to-screen mapping the GDI+ renderer uses, so the two
-   can be visually compared directly via the Ctrl+D toggle.
-   ============================================================================ */
+/* PHASE 2 - static image compositing via D2D + WIC. */
 #include <wincodec.h>
 
-/* Mirrors the layout struct/functions in launcher_merged.c - can't share a
-   type across translation units without a shared header, and this is
-   simple POD data, so duplicating it here is safe and low-risk. */
+/* Mirrors the layout struct/functions in launcher_merged. */
 typedef struct { int x, y, w, h; double scale; } SV2LayoutMirror;
 extern SV2LayoutMirror SV2_GetLayout(int clientW, int clientH);
 extern int SV2_MapX(SV2LayoutMirror L, double nx);
@@ -205,15 +166,11 @@ static SV2D2DCachedImage g_testImages[] = {
 };
 #define SV2_TEST_IMAGE_COUNT (sizeof(g_testImages) / sizeof(g_testImages[0]))
 
-/* Glass entries in g_testImages start at index 7 and run 18 entries - this
-   offset plus SV2_HoveredGlass (0..17, same order as the real SV2_Glasses[]
-   array) identifies which g_testImages slot to skip in the base pass below. */
+/* Glass entries in g_testImages start at index 7 and run 18 entries. */
 #define SV2_GLASS_START_INDEX 7
 #define SV2_GLASS_COUNT_MIRROR 18
 
-/* Inverted counterparts, one per glass, same order as SV2_Glasses[] in the
-   main source - loaded lazily like every other image, only actually drawn
-   for whichever glass is currently hovered. */
+/* Inverted counterparts, one per glass, same order as SV2_Glasses[] in the main source. */
 static SV2D2DCachedImage g_glassInvImages[SV2_GLASS_COUNT_MIRROR] = {
     { "SV2_ENGINEERING_GLASS_INV", NULL, FALSE },
     { "SV2_COMBAT_HACKING_GLASS_INV", NULL, FALSE },
@@ -318,9 +275,7 @@ void SV2_D2D_Phase2Paint(HWND hwnd, ID2D1RenderTarget *rt) {
     SV2LayoutMirror L = SV2_GetLayout(rc.right - rc.left, rc.bottom - rc.top);
 
     for (size_t i = 0; i < SV2_TEST_IMAGE_COUNT; i++) {
-        /* The currently-hovered glass is skipped here and drawn afterward
-           instead, using its inverted image - same "drawn last, on top"
-           order the GDI+ path uses. */
+        /* The currently-hovered glass is skipped here and drawn afterward instead, using its. */
         int glassIdx = (int)i - SV2_GLASS_START_INDEX;
         if (glassIdx >= 0 && glassIdx < SV2_GLASS_COUNT_MIRROR && glassIdx == SV2_HoveredGlass) continue;
 
@@ -330,10 +285,7 @@ void SV2_D2D_Phase2Paint(HWND hwnd, ID2D1RenderTarget *rt) {
         }
         if (!g_testImages[i].bitmap) continue;
 
-        /* Every PNG in this app is a full 1918x1008 canvas-sized layer with
-           transparency around the actual content (same convention the
-           GDI+ path relies on), so draw each one at the full mapped canvas
-           rect - identical to what SV2_DrawImg does. */
+        /* Every PNG in this app is a full 1918x1008 canvas-sized layer with transparency around the. */
         D2D1_RECT_F destRect;
         destRect.left = (FLOAT)SV2_MapX(L, 0);
         destRect.top = (FLOAT)SV2_MapY(L, 0);
@@ -344,8 +296,7 @@ void SV2_D2D_Phase2Paint(HWND hwnd, ID2D1RenderTarget *rt) {
             D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, NULL);
     }
 
-    /* Hovered glass, drawn on top using its inverted image (falls back to
-       the normal image if no inverted version loaded, same as GDI+). */
+    /* Hovered glass, drawn on top using its inverted image. */
     if (SV2_HoveredGlass >= 0 && SV2_HoveredGlass < SV2_GLASS_COUNT_MIRROR) {
         if (!g_glassInvImages[SV2_HoveredGlass].loadAttempted) {
             g_glassInvImages[SV2_HoveredGlass].loadAttempted = TRUE;
@@ -366,37 +317,18 @@ void SV2_D2D_Phase2Paint(HWND hwnd, ID2D1RenderTarget *rt) {
     }
 }
 
-/* ============================================================================
-   PHASE 2b - the save-dependent static elements Phase 2 originally left out
-   (screenshot mask, location pin, month image) - these only make sense once
-   a save is loaded, and needed a bit more than a straight WIC-resource load:
-   - MONTH: same full-canvas draw as every other Phase 2 image, just gated
-     on which month the loaded save's date falls in.
-   - LOCATION PIN: needs a cropped SOURCE rect (its own bbox region only)
-     positioned at a different screen location, not the "draw the whole
-     canvas" pattern - mirrors SV2's own alpha-scanned bbox rather than
-     re-deriving it.
-   - SCREENSHOT: GDI+ already computes this every save load (masked into
-     Image.png's alpha shape - real per-pixel masking, not something worth
-     re-implementing here). Bridged into D2D by asking GDI+ for an HBITMAP
-     of its result, wrapping that as a WIC bitmap, then handing it to D2D
-     the same way every other image on this screen is loaded - reusing
-     GDI+'s already-correct output instead of duplicating the masking math.
-   ============================================================================ */
+/* PHASE 2b - the save-dependent static elements Phase 2 originally left out (screenshot mask, location pin, month image) */
 
-/* Mirrors SV2Img's layout (see the comment on SV2LayoutMirror above for why
-   duplicating a POD struct here instead of sharing a header is fine) - only
-   .bbox and .valid are read, so the exact pointer type of the first member
-   doesn't matter as long as it's pointer-sized. */
+/* Mirrors SV2Img's layout. */
 typedef struct { void *img; RECT bbox; int valid; } SV2ImgMirror;
 extern SV2ImgMirror SV2_LocationPin;
 extern SV2ImgMirror SV2_Image;
 extern SV2ImgMirror SV2_Months[12];
-extern void *SV2_ScreenshotMasked; /* GpImage* from the GDI+ side */
+extern void *SV2_ScreenshotMasked; /* GpImage* from the GDI+ side. */
 extern int SV2_MonthFromSaveInfo(void);
 extern int SE_g_saveLoaded;
 
-#define SV2P2B_PIN_CX 28.0 /* nudged left from the original 46.0 */
+#define SV2P2B_PIN_CX 28.0 /* nudged left from the original 46.0. */
 #define SV2P2B_PIN_CY 824.0
 
 static ID2D1Bitmap *g_pinBitmap = NULL;
@@ -408,10 +340,7 @@ static const char *g_monthResNames[12] = {
     "SV2_JULY", "SV2_AUGUST", "SV2_SEPTEMBER", "SV2_OCTOBER", "SV2_NOVEMBER", "SV2_DECEMBER"
 };
 
-/* GDI+ flat C API - declared directly rather than pulling in the full
-   gdiplus.h (which is a messy fit for a plain-C, CINTERFACE-style file);
-   this is the one function needed to bridge a GpBitmap* into something WIC
-   can read. Matches the real export's signature exactly. */
+/* GDI+ flat C API. */
 typedef int GpStatus;
 extern GpStatus WINAPI GdipCreateHBITMAPFromBitmap(void *bitmap, HBITMAP *hbmReturn, UINT32 background);
 
@@ -423,15 +352,15 @@ static ID2D1Bitmap *SV2_D2D_GetScreenshotBitmap(ID2D1RenderTarget *rt) {
     if (!SV2_ScreenshotMasked) return NULL;
     if (SV2_ScreenshotMasked == g_lastScreenshotSource && g_screenshotBitmap) return g_screenshotBitmap;
 
-    /* Source changed (new save loaded, or masking redone) - rebuild. */
+    /* Source changed (new save loaded, or masking redone). */
     if (g_screenshotBitmap) { ID2D1Bitmap_Release(g_screenshotBitmap); g_screenshotBitmap = NULL; }
     g_lastScreenshotSource = SV2_ScreenshotMasked;
 
     if (!SV2_D2D_EnsureWIC()) return NULL;
 
     HBITMAP hbm = NULL;
-    GpStatus st = GdipCreateHBITMAPFromBitmap(SV2_ScreenshotMasked, &hbm, 0x00FFFFFF /* transparent-ish background, alpha preserved */);
-    if (st != 0 /* Ok */ || !hbm) {
+    GpStatus st = GdipCreateHBITMAPFromBitmap(SV2_ScreenshotMasked, &hbm, 0x00FFFFFF /* transparent-ish background, alpha preserved. */);
+    if (st != 0 /* Ok. */ || !hbm) {
         char msg[100];
         snprintf(msg, sizeof(msg), "[d2d] GdipCreateHBITMAPFromBitmap failed for screenshot, status=%d", st);
         AppendStatus(msg);
@@ -479,8 +408,7 @@ void SV2_D2D_Phase2bPaint(HWND hwnd, ID2D1RenderTarget *rt) {
     GetClientRect(hwnd, &rc);
     SV2LayoutMirror L = SV2_GetLayout(rc.right - rc.left, rc.bottom - rc.top);
 
-    /* Screenshot, masked to Image.png's alpha shape - drawn at that mask's
-       own bbox position/size, same as the GDI+ path. */
+    /* Screenshot, masked to Image.png's alpha shape. */
     ID2D1Bitmap *shot = SV2_D2D_GetScreenshotBitmap(rt);
     if (shot && SV2_Image.valid) {
         RECT b = SV2_Image.bbox;
@@ -492,8 +420,7 @@ void SV2_D2D_Phase2bPaint(HWND hwnd, ID2D1RenderTarget *rt) {
         ID2D1RenderTarget_DrawBitmap(rt, shot, &destRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, NULL);
     }
 
-    /* Location pin - cropped to its own bbox region (source rect), not the
-       full-canvas pattern, since it's repositioned to a different spot. */
+    /* Location pin - cropped to its own bbox region (source rect), not the full-canvas pattern,. */
     if (!g_pinLoadAttempted) {
         g_pinLoadAttempted = TRUE;
         g_pinBitmap = SV2_D2D_LoadBitmapFromResource(rt, "SV2_LOCATION_PIN_ICON");
@@ -511,8 +438,7 @@ void SV2_D2D_Phase2bPaint(HWND hwnd, ID2D1RenderTarget *rt) {
         ID2D1RenderTarget_DrawBitmap(rt, g_pinBitmap, &destRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &srcRect);
     }
 
-    /* Month/calendar image - full-canvas draw like Phase 2's static images,
-       just gated on which month the loaded save's date falls in. */
+    /* Month/calendar image. */
     int month = SV2_MonthFromSaveInfo();
     if (month >= 1 && month <= 12) {
         int mi = month - 1;

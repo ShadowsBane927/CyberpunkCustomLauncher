@@ -44,7 +44,7 @@ license text/attribution for each:
 The SIL Open Font License explicitly permits embedding fonts within
 software and redistributing that software (including commercially),
 provided the font itself isn't sold as a standalone product and the
-license text accompanies distribution — this file serves that purpose for
+license text accompanies distribution: this file serves that purpose for
 the 4 OFL fonts above. The CC BY license for Red Menace requires only
 attribution, provided above.
 

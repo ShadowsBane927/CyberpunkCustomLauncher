@@ -7,36 +7,29 @@ readable C.
 
 ## What's included in this repository
 
-- `CyberpunkCustomLauncherGUI_v8_source.c` — the main application source
+- `CyberpunkCustomLauncherGUI_v8_source.c`: the main application source
   (menu, save editor, save-file parsing, GDI+ UI)
-- `d2d_phase1_test.c` — Direct2D device/swap-chain setup and static image
+- `d2d_phase1_test.c`: Direct2D device/swap-chain setup and static image
   compositing for the save editor screen
-- `d2d_phase3_text.c` — DirectWrite text rendering for the save editor
-- `d2d_menu_paint.c` — Direct2D rendering for the main menu screen
-- `saveengine.h` — save-file (`.sav.dat`) parsing/serialization
-- `gen_rc.py` — generates the Windows resource script (`resource.rc`) that
+- `d2d_phase3_text.c`: DirectWrite text rendering for the save editor
+- `d2d_menu_paint.c`: Direct2D rendering for the main menu screen
+- `saveengine.h`: save-file (`.sav.dat`) parsing/serialization
+- `gen_rc.py`: generates the Windows resource script (`resource.rc`) that
   maps embedded asset filenames to resource IDs
-- `vendor/lz4/` — the LZ4 compression library (MIT licensed, unmodified,
+- `vendor/lz4/`: the LZ4 compression library (MIT licensed, unmodified,
   from https://github.com/lz4/lz4), used by `saveengine.h` to
   decompress/compress save-file chunks
 
-## What is NOT included, and why
+## Assets
 
-This repository does **not** include the UI artwork (backgrounds, buttons,
-and other image assets). This artwork is original work created by the
-author, not derived from any third-party source, but is kept out of this
-public source repository separately from the licensing question addressed
-below.
-
-The 5 embedded fonts (see [LICENSES.md](LICENSES.md) for full details)
-**are** included directly in `assets/`, all under licenses that explicitly
-permit embedding in and redistributing with software:
-Emblema One, Limelight, and Cinzel (SIL Open Font License), DSEG7 Classic
-(SIL Open Font License), and Red Menace (Creative Commons Attribution 3.0).
-
-To rebuild the exe, you need the image asset files placed in the same
-folder layout `gen_rc.py` expects (see below). The fonts are already
-present in `assets/` and `gen_rc.py` is configured to use them directly.
+All assets needed to build the exe are included directly in `assets/`:
+the main-menu and save-editor artwork (`Menu_specific/`, `Save_specific/`),
+the app icon (`app_icon.ico`), and all 5 embedded fonts (see
+[LICENSES.md](LICENSES.md) for font licenses: Emblema One, Limelight, and
+Cinzel are SIL Open Font License; DSEG7 Classic is SIL Open Font License;
+Red Menace is Creative Commons Attribution 3.0). Nothing needs to be
+supplied separately - `gen_rc.py` is already configured to find everything
+where it is.
 
 ## Toolchain setup (Linux/WSL/any POSIX host with apt)
 
@@ -47,25 +40,21 @@ apt-get install -y mingw-w64 g++-mingw-w64-x86-64
 
 This provides `x86_64-w64-mingw32-gcc` and `x86_64-w64-mingw32-windres`.
 
-## Asset layout expected by gen_rc.py
+## Asset layout (all included in this repository)
 
 ```
 assets/
-  Menu_specific/Menu specific/   <- all main-menu PNG/GIF artwork
-  Save_specific/Save specific/   <- all save-editor PNG artwork
-  app_icon.ico                   <- the application icon (multi-resolution .ico)
-  EmblemaOne-Regular.ttf         <- already included in this repository
-  Limelight-Regular.ttf          <- already included in this repository
-  Cinzel-VF.ttf                  <- already included in this repository
-  DSEG7Classic-Regular.ttf       <- already included in this repository
-  red-menace.otf                 <- already included in this repository
+  Menu_specific/Menu specific/   <- main-menu artwork
+  Save_specific/Save specific/   <- save-editor artwork
+  app_icon.ico                   <- application icon
+  EmblemaOne-Regular.ttf
+  Limelight-Regular.ttf
+  Cinzel-VF.ttf
+  DSEG7Classic-Regular.ttf
+  red-menace.otf
 ```
 
-The 5 fonts are already present in `assets/` in this repository - only the
-`Menu_specific/`, `Save_specific/`, and `app_icon.ico` image assets need to
-be supplied separately.
-
-Every filename `gen_rc.py` expects is listed explicitly in that script —
+Every filename `gen_rc.py` expects is listed explicitly in that script -
 open it and search for `rc(` calls if you need the exact expected name
 for any individual asset.
 

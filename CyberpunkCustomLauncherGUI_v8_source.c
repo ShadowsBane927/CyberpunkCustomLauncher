@@ -1,25 +1,4 @@
-/*
- * CyberpunkCustomLauncherGUI_v4.c
- *
- * Complete rebuild of the conflict checker: instead of launching/embedding
- * the external red4-conflicts.exe (which opened its own separate window and
- * couldn't be reliably embedded), this implements REAL native .archive file
- * parsing directly, based on the verified binary format from rfuzzo's
- * open-source red4lib (https://github.com/rfuzzo/red4lib):
- *
- *   - 40-byte Header (magic, version, index_position, ...)
- *   - Seek to header.index_position
- *   - 28-byte Index (file_entry_count, ...)
- *   - file_entry_count x 56-byte FileEntry records, each with a name_hash_64
- *
- * Two archives sharing the same name_hash_64 = a genuine conflict.
- * Results print directly into the same embedded log-style panel used for
- * everything else - no separate window, no foreign-process embedding.
- *
- * "Check Mod Conflicts" is now its own standalone, repeatable button.
- * "Launch Game" is fully separate.
- * Window now starts maximized.
- */
+/* * CyberpunkCustomLauncherGUI_v4. */
 
 #include <windows.h>
 #include <commctrl.h>
@@ -56,8 +35,7 @@ using namespace Gdiplus;
 int gViewMode = MODE_LAUNCHER;
 BOOL gSaveEditorActivated = FALSE;
 HWND hButtonBack = NULL;
-/* Promoted from WM_CREATE locals so SwitchToSaveEditor/SwitchToLauncher can
-   show/hide them */
+/* Promoted from WM_CREATE locals so SwitchToSaveEditor/SwitchToLauncher can show/hide them. */
 HWND hModsLabel = NULL, hBrowseBtn = NULL, hConflictsBtn = NULL;
 
 HINSTANCE hInstanceGlobal;
@@ -78,10 +56,7 @@ void AppendStatus(const char *msg) {
     SendMessageA(hStatusText, EM_REPLACESEL, 0, (LPARAM)msg);
     SendMessageA(hStatusText, EM_REPLACESEL, 0, (LPARAM)"\r\n");
 
-    /* Also write to a log file next to the exe, so a debug session can be
-       sent as a file instead of copy-pasting from the console (which can
-       lose content if it scrolls, gets cleared, or is too long to select
-       cleanly). */
+    /* Also write to a log file next to the exe, so a debug session can be sent as a file. */
     static char logPath[MAX_PATH] = "";
     if (logPath[0] == '\0') {
         GetModuleFileNameA(NULL, logPath, MAX_PATH);
@@ -99,7 +74,7 @@ void AppendStatus(const char *msg) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Native .archive conflict scanner                                       */
+/* Native .archive conflict scanner. */
 /* ---------------------------------------------------------------------- */
 
 typedef struct {
@@ -107,10 +82,7 @@ typedef struct {
     char archiveName[MAX_PATH];
 } HashEntry;
 
-/* Reads exactly one .archive file's header + index + file entries, and
-   appends each entry's (hash, this archive's filename) into the growable
-   array. Returns the new count, or -1 on read failure (corrupt/unsupported
-   file - skipped, not fatal to the overall scan). */
+/* Reads exactly one .archive file's header + index + file entries, and appends each entry's. */
 int ReadArchiveEntries(const char *fullPath, const char *displayName,
                         HashEntry **entries, int *count, int *capacity) {
     FILE *f = fopen(fullPath, "rb");
@@ -120,7 +92,7 @@ int ReadArchiveEntries(const char *fullPath, const char *displayName,
     if (fread(headerBuf, 1, 40, f) != 40) { fclose(f); return -1; }
 
     unsigned int magic = *(unsigned int *)(headerBuf + 0);
-    if (magic != 1380009042u) { /* not a valid .archive file */
+    if (magic != 1380009042u) { /* not a valid .archive file. */
         fclose(f);
         return -1;
     }
@@ -136,7 +108,7 @@ int ReadArchiveEntries(const char *fullPath, const char *displayName,
 
     for (unsigned int i = 0; i < fileEntryCount; i++) {
         unsigned char entryBuf[56];
-        if (fread(entryBuf, 1, 56, f) != 56) break; /* truncated, stop reading this archive */
+        if (fread(entryBuf, 1, 56, f) != 56) break; /* truncated, stop reading this archive. */
 
         unsigned long long nameHash = *(unsigned long long *)(entryBuf + 0);
 
@@ -169,7 +141,7 @@ typedef struct {
     int sharedCount;
 } ConflictPair;
 
-/* Finds an existing pair entry (order-independent) or adds a new one */
+/* Finds an existing pair entry (order-independent) or adds a new one. */
 void RecordConflictPair(ConflictPair **pairs, int *pairCount, int *pairCapacity,
                          const char *a, const char *b) {
     for (int i = 0; i < *pairCount; i++) {
@@ -296,8 +268,7 @@ void RunNativeConflictScan(void) {
                 }
             }
 
-            /* Record every distinct pair within this conflict group for the
-               clean tooltip summary */
+            /* Record every distinct pair within this conflict group for the clean tooltip summary. */
             for (int a = i; a < j; a++) {
                 for (int b = a + 1; b < j; b++) {
                     if (strcmp(entries[a].archiveName, entries[b].archiveName) != 0) {
@@ -319,7 +290,7 @@ void RunNativeConflictScan(void) {
         archiveCount, skippedCount, conflictGroups);
     AppendStatus(summary);
 
-    /* Build the clean, human-readable tooltip text */
+    /* Build the clean, human-readable tooltip text. */
     gConflictsFound = (pairCount > 0);
     gConflictSummary[0] = '\0';
     for (int p = 0; p < pairCount; p++) {
@@ -352,7 +323,7 @@ void BrowseForArchivesFolder(void) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* REDmod deploy + game launch (unchanged from before)                    */
+/* REDmod deploy + game launch (unchanged from before) */
 /* ---------------------------------------------------------------------- */
 
 int RunRedModDeploy(void) {
@@ -488,9 +459,9 @@ void CheckAndApplyDynamicPriority(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Embedded Save Editor (merged from SaveEditorGUI.c)                  */
-/* All symbols below are prefixed SE_ to avoid clashing with the       */
-/* launcher's own globals/functions of the same conceptual purpose.    */
+/* Embedded Save Editor (merged from SaveEditorGUI.c) */
+/* All symbols below are prefixed SE_ to avoid clashing with the. */
+/* launcher's own globals/functions of the same conceptual purpose. */
 /* ------------------------------------------------------------------ */
 
 #define SE_ID_LOAD_BTN     501
@@ -521,9 +492,9 @@ RECT SE_g_imageRect = {620, 12, 860, 152};
 int SE_g_currentClientWidth = 900;
 int SE_g_currentClientHeight = 700;
 
-HFONT SE_g_appFont = NULL; /* Bookman Old Style, used for all controls */
+HFONT SE_g_appFont = NULL; /* Bookman Old Style, used for all controls. */
 
-/* Loads a PNG embedded as an RCDATA resource into a GDI+ image via memory stream */
+/* Loads a PNG embedded as an RCDATA resource into a GDI+ image via memory stream. */
 GpImage *SE_LoadImageFromResource(const char *resourceName) {
     HRSRC hRes = FindResourceA(NULL, resourceName, RT_RCDATA);
     if (!hRes) return NULL;
@@ -547,10 +518,9 @@ GpImage *SE_LoadImageFromResource(const char *resourceName) {
     return img;
 }
 
-int SE_g_gridBottomY = 320; /* updated after each SE_BuildProficiencyFields call */
+int SE_g_gridBottomY = 320; /* updated after each SE_BuildProficiencyFields call. */
 
-/* Layout bands - computed once here so every section has a guaranteed,
-   non-overlapping home regardless of window size. */
+/* Layout bands - computed once here so every section has a guaranteed, non-overlapping home. */
 #define PATHROW_Y 22
 #define INFOBOX_GAP 46
 #define INFOBOX_H 58
@@ -558,26 +528,22 @@ int SE_g_gridBottomY = 320; /* updated after each SE_BuildProficiencyFields call
 #define BUTTONROW_H 49
 #define GRID_GAP 10
 #define STATUS_GAP 20
-#define PATHROW_H 30 /* fixed - matches SE_RepositionPathRow's rowH */
+#define PATHROW_H 30 /* fixed - matches SE_RepositionPathRow's rowH. */
 
 int SE_GetInfoBoxY(void) {
     return PATHROW_Y + PATHROW_H + INFOBOX_GAP;
 }
-#define SAVEBTN_STAGGER_GAP 26 /* vertical gap between Load Save and the staggered Save Changes below it */
+#define SAVEBTN_STAGGER_GAP 26 /* vertical gap between Load Save and the staggered Save Changes below it. */
 int SE_GetButtonRowY(void) { return SE_GetInfoBoxY() + INFOBOX_H + BUTTONROW_GAP; }
 int SE_GetGridStartY(void) { return SE_GetButtonRowY() + BUTTONROW_H + GRID_GAP; }
 
-/* SE_g_currentClientWidth/Height reflect true physical pixels. This returns
-   the plain visible rect (used for sizing things that should track actual
-   screen space: fonts, the log box, etc). See SE_GetDecoXform() below for how
-   the artwork itself is placed inside this rect without distortion. */
+/* SE_g_currentClientWidth/Height reflect true physical pixels. */
 RECT SE_GetBodyDecoRect(void) {
     RECT r;
     int top = SE_GetGridStartY();
 
     int availWidth = SE_g_currentClientWidth - 40;
-    /* The status log overlaps the image's own blank bottom-left corner (see
-       SE_RepositionStatusBox), so we only need a small bottom margin here. */
+    /* The status log overlaps the image's own blank bottom-left corner (see SE_RepositionStatusBox) */
     int availHeight = SE_g_currentClientHeight - top - 20;
     if (availWidth < 400) availWidth = 400;
     if (availHeight < 300) availHeight = 300;
@@ -589,19 +555,7 @@ RECT SE_GetBodyDecoRect(void) {
     return r;
 }
 
-/* Uniform (non-distorting) scale-to-cover for the 1918x1008 artwork within
-   SE_GetBodyDecoRect()'s visible rect, with the inevitable overflow cropped
-   from the blank top margin (never from the sides, which would clip the
-   character). cropFyStart/cropFxStart are the fraction of the native image
-   trimmed from the top / from each side - used to remap g_skillPositions'
-   native fx/fy into visible pixels via SE_DecoMapX/SE_DecoMapY, and to compute
-   the matching source rect when drawing the artwork itself, so the icons
-   always line up with the art beneath them regardless of window shape.
-
-   'art' is where the artwork is actually drawn - normally equal to 'vis',
-   but if MAX_CROP_FY had to ease the scale back (seebelow), 'art' shrinks
-   and centers within 'vis' instead of the art being stretched to refill
-   the space, which would reintroduce distortion. */
+/* Uniform (non-distorting) scale-to-cover for the 1918x1008 artwork within. */
 typedef struct { RECT vis; RECT art; double cropFyStart; double cropFxStart; } DecoXform;
 
 DecoXform SE_GetDecoXform(void) {
@@ -612,17 +566,9 @@ DecoXform SE_GetDecoXform(void) {
 
     double scaleW = availWidth / 1918.0;
     double scaleH = availHeight / 1008.0;
-    double scale = (scaleW > scaleH) ? scaleW : scaleH; /* cover: larger wins */
+    double scale = (scaleW > scaleH) ? scaleW : scaleH; /* cover: larger wins. */
 
-    /* Never let the top crop reach fy=0.369, where the topmost skill icon
-       graphic (Engineering's fist, directly measured via pixel scan of
-       decoration_bg.png) actually starts - cropping past that would cut
-       off real artwork, not just blank margin. The Level/Street Cred
-       block's sizing is handled separately by SE_GetLevelCredRects' own
-       shrink-safety logic, so this cap only needs to protect the icon
-       itself, not preemptively reserve extra room - letting the artwork
-       fill the full window width whenever possible instead of trading
-       away legibility of one thing to avoid a small shrink in another. */
+    /* Never let the top crop reach fy=0.369, where the topmost skill icon graphic. */
     #define MAX_CROP_FY (372.0 / 1008.0)
     double fullH = 1008.0 * scale;
     if (fullH > availHeight) {
@@ -641,9 +587,7 @@ DecoXform SE_GetDecoXform(void) {
         t.cropFxStart = (fullW - availWidth) / (2.0 * fullW);
         t.art = t.vis;
     } else {
-        /* Letterbox fallback (only when the crop cap above kicked in):
-           center the true-size art within the available width rather than
-           stretching it back out. */
+        /* Letterbox fallback (only when the crop cap above kicked in): center the true-size art. */
         t.cropFxStart = 0.0;
         int destW = (int)fullW;
         int destX = t.vis.left + (availWidth - destW) / 2;
@@ -667,16 +611,7 @@ int SE_DecoMapY(DecoXform t, double fy) {
     return t.art.top + (int)(vfy * (t.art.bottom - t.art.top));
 }
 
-/* Screenshot width/position measured directly from the reference mockup
-   (Alllayers.png): isolated the screenshot's pixels by finding actual
-   color content (the line art is pure grayscale, the photo isn't), which
-   gave a clean bounding box of (1121,19)-(1697,355) on the reference's
-   1918x1008 canvas - aspect ratio 576:336 (1.714:1). Horizontal position
-   still maps through the crop transform like everything else, but the
-   vertical position is centered between the screen's top edge and where
-   Intelligence Skill's icon actually starts (measured at native y=376),
-   rather than a fixed native position that could sit low in the
-   available space depending on how much crop was applied. */
+/* Screenshot width/position measured directly from the reference mockup (Alllayers.png): */
 RECT SE_GetScreenshotRect(DecoXform xform) {
     RECT r;
     r.left = SE_DecoMapX(xform, 0.5845);
@@ -691,10 +626,7 @@ RECT SE_GetScreenshotRect(DecoXform xform) {
     return r;
 }
 
-/* Fraction of the deco image's height below which the left-hand skill grid
-   (Engineering / Combat Hacking / Hacking / Technical Ability / Kenjutsu /
-   Demolition, all fy <= 0.611) has nothing left drawn under it - that blank
-   corner is where the reference puts the status log, not below the image. */
+/* Fraction of the deco image's height below which the left-hand skill grid. */
 #define LOG_TOP_FRACTION 0.60
 #define LOG_WIDTH_FRACTION 0.47
 
@@ -715,8 +647,7 @@ void SE_RepositionStatusBox(void) {
     MoveWindow(SE_hStatusText, x, y, w, h, TRUE);
     SE_g_gridBottomY = br.bottom;
 
-    /* "Back to Launcher" sits right above (touching) the log box's top
-       edge, out of the way of the save-file row above it. */
+    /* "Back to Launcher" sits right above (touching) the log box's top edge, out of the way of. */
     if (hButtonBack) {
         int backH = 28, backW = 180;
         MoveWindow(hButtonBack, x, y - backH, backW, backH, TRUE);
@@ -727,17 +658,13 @@ void SE_RepositionPathRow(void) {
     if (!SE_hSaveLabel || !SE_hPathBox || !SE_hHelpBtn) return;
 
     int availWidth = SE_g_currentClientWidth - 40;
-    int rightEdge = 20 + (int)(LOG_WIDTH_FRACTION * availWidth); /* matches log box's right edge */
+    int rightEdge = 20 + (int)(LOG_WIDTH_FRACTION * availWidth); /* matches log box's right edge. */
 
-    /* Label and help button stay at their original fixed size/position -
-       only the path box stretches to fill the gap and keep the "?" button
-       aligned with the log box's right edge. Row is a bit taller than the
-       original, with all three elements vertically centered together and
-       the help button kept square. */
+    /* Label and help button stay at their original fixed size/position. */
     int rowTop = 11, rowH = 30;
     int labelX = 20, labelW = 70, labelH = 26;
     int labelY = rowTop + (rowH - labelH) / 2;
-    int btnY = rowTop, btnW = 30, btnH = 30; /* square */
+    int btnY = rowTop, btnW = 30, btnH = 30; /* square. */
     int pathY = rowTop, pathH = rowH;
 
     int btnX = rightEdge - btnW;
@@ -752,9 +679,7 @@ void SE_RepositionPathRow(void) {
 
 
 
-/* Converts "TechnicalAbilitySkill" -> "TECHNICAL ABILITY SKILL",
-   "StreetCred" -> "STREET CRED", etc - inserts a space before each
-   uppercase letter (except the first) and uppercases everything. */
+/* Converts "TechnicalAbilitySkill" -> "TECHNICAL ABILITY SKILL", "StreetCred" -> "STREET. */
 void SE_PrettifyName(const char *raw, char *out, size_t outSize) {
     size_t o = 0;
     for (size_t i = 0; raw[i] != '\0' && o < outSize - 2; i++) {
@@ -773,13 +698,8 @@ void SE_AppendStatus(const char *msg) {
     SendMessageA(SE_hStatusText, EM_REPLACESEL, 0, (LPARAM)"\r\n");
 }
 
-/* Extremely simple JSON field extraction: finds "fieldName":"value" or
-   "fieldName":number and returns the raw text of the value. Good enough for
-   the known, fixed structure of Cyberpunk's own metadata JSON - not a real
-   parser, just targeted string search. */
-/* District and subdistrict code lookup, derived and verified against the
-   real street/district list (psiberx/streets.lua) cross-referenced with
-   the quest-completion codes found in real save metadata. */
+/* Extremely simple JSON field extraction: finds "fieldName":"value" or "fieldName":number. */
+/* District and subdistrict code lookup, derived and verified against the real. */
 typedef struct { const char *code; const char *name; } CodeName;
 
 static const CodeName g_districtCodes[] = {
@@ -803,9 +723,7 @@ const char *LookupCode(const CodeName *table, int count, const char *code) {
     return NULL;
 }
 
-/* Parses a debugString like "ce_wbr_hil_02" into "Westbrook - Charter Hill".
-   Format is [prefix]_[district]_[subdistrict]_[number] - not always exactly
-   4 parts, so this is best-effort, not guaranteed for every code. */
+/* Parses a debugString like "ce_wbr_hil_02" into "Westbrook. */
 void SE_DeriveLocationFromDebugString(const char *debugString, char *out, size_t outSize) {
     char buf[128];
     strncpy(buf, debugString, sizeof(buf) - 1);
@@ -834,7 +752,7 @@ void SE_DeriveLocationFromDebugString(const char *debugString, char *out, size_t
     snprintf(out, outSize, "Unknown area");
 }
 
-/* Reformats "HH:MM:SS, D.MM.YYYY" into "H:MM am/pm, Month Dth, YYYY" */
+/* Reformats "HH:MM:SS, D.MM.YYYY" into "H:MM am/pm, Month Dth, YYYY". */
 void SE_FormatTimestamp(const char *raw, char *out, size_t outSize) {
     int hh, mm, ss, day, mon, year;
     if (sscanf(raw, "%d:%d:%d, %d.%d.%d", &hh, &mm, &ss, &day, &mon, &year) != 6) {
@@ -860,10 +778,7 @@ void SE_FormatTimestamp(const char *raw, char *out, size_t outSize) {
     snprintf(out, outSize, "%d:%02d %s, %s %d%s %d", hour12, mm, ampm, monthName, day, suffix, year);
 }
 
-/* Same parse, but split into a date-only and time-only string - the new
-   save editor skin shows these in two separate places (a date display
-   above the month image, and a rotated time-only display) rather than
-   one combined line. */
+/* Same parse, but split into a date-only and time-only string. */
 void SE_FormatDateTimeParts(const char *raw, char *dateOut, size_t dateSize, char *timeOut, size_t timeSize) {
     int hh, mm, ss, day, mon, year;
     if (sscanf(raw, "%d:%d:%d, %d.%d.%d", &hh, &mm, &ss, &day, &mon, &year) != 6) {
@@ -890,9 +805,7 @@ void SE_FormatDateTimeParts(const char *raw, char *dateOut, size_t dateSize, cha
     if (timeOut) snprintf(timeOut, timeSize, "%d:%02d %s", hour12, mm, ampm);
 }
 
-/* Extracts the last segment of a quest path like
-   "ep1/quests/main_quest/q301_crash/00_hook/get_to_combat_zone" and
-   prettifies it to "Get To Combat Zone" */
+/* Extracts the last segment of a quest path like. */
 void SE_PrettifyQuestPath(const char *rawPath, char *out, size_t outSize) {
     const char *lastSlash = strrchr(rawPath, '/');
     const char *segment = lastSlash ? lastSlash + 1 : rawPath;
@@ -947,8 +860,7 @@ int SE_ExtractJsonStringField(const char *json, const char *fieldName, char *out
     return 1;
 }
 
-/* Finds the first file in dir matching one of the given extensions
-   (case-insensitive), returns full path or empty string */
+/* Finds the first file in dir matching one of the given extensions (case-insensitive),. */
 void SE_FindFirstFileWithExt(const char *dir, const char **extensions, int extCount, char *outPath, size_t outSize) {
     outPath[0] = '\0';
     char pattern[MAX_PATH];
@@ -988,19 +900,19 @@ char SV2_g_timeOnly[24] = "";
 char SV2_g_quest[256] = "";
 char SV2_g_location[80] = "";
 char SV2_g_folderName[MAX_PATH] = "";
-int SV2_g_month = 0; /* 1-12, parsed from the timestamp; 0 if unknown */
+int SV2_g_month = 0; /* 1-12, parsed from the timestamp. */
 
 void SE_LoadScreenshotAndInfo(const char *savePath) {
     char dir[MAX_PATH];
     SE_GetDirectoryOf(savePath, dir, sizeof(dir));
 
-    /* Free any previous image */
+    /* Free any previous image. */
     if (SE_g_screenshotImage) {
         GdipDisposeImage(SE_g_screenshotImage);
         SE_g_screenshotImage = NULL;
     }
 
-    /* Find and load screenshot */
+    /* Find and load screenshot. */
     const char *imgExts[] = { ".png", ".jpg", ".jpeg", ".bmp" };
     char imgPath[MAX_PATH];
     SE_FindFirstFileWithExt(dir, imgExts, 4, imgPath, sizeof(imgPath));
@@ -1011,7 +923,7 @@ void SE_LoadScreenshotAndInfo(const char *savePath) {
         GdipLoadImageFromFile(wPath, &SE_g_screenshotImage);
     }
 
-    /* Find and parse metadata JSON */
+    /* Find and parse metadata JSON. */
     const char *jsonExts[] = { ".json" };
     char jsonPath[MAX_PATH];
     SE_FindFirstFileWithExt(dir, jsonExts, 1, jsonPath, sizeof(jsonPath));
@@ -1023,8 +935,7 @@ void SE_LoadScreenshotAndInfo(const char *savePath) {
     folderName[sizeof(folderName) - 1] = '\0';
     strncpy(SV2_g_folderName, folderName, sizeof(SV2_g_folderName) - 1);
 
-    /* Reset per-load so a save with no JSON doesn't show stale text from
-       a previously-loaded save. */
+    /* Reset per-load so a save with no JSON doesn't show stale text from a previously-loaded. */
     SV2_g_saveName[0] = SV2_g_lifePath[0] = SV2_g_timestamp[0] = '\0';
     SV2_g_dateOnly[0] = SV2_g_timeOnly[0] = '\0';
     SV2_g_quest[0] = SV2_g_location[0] = '\0';
@@ -1073,8 +984,7 @@ void SE_LoadScreenshotAndInfo(const char *savePath) {
                 strncpy(SV2_g_timestamp, timestamp, sizeof(SV2_g_timestamp) - 1);
                 strncpy(SV2_g_quest, prettyQuest, sizeof(SV2_g_quest) - 1);
                 strncpy(SV2_g_location, location, sizeof(SV2_g_location) - 1);
-                /* rawTimestamp is like "2026-07-03T00:04:..." - month is
-                   the 2 digits after the first '-' */
+                /* rawTimestamp is like "2026-07-03T00:04: */
                 if (strlen(rawTimestamp) >= 7 && rawTimestamp[4] == '-') {
                     SV2_g_month = (rawTimestamp[5] - '0') * 10 + (rawTimestamp[6] - '0');
                     if (SV2_g_month < 1 || SV2_g_month > 12) SV2_g_month = 0;
@@ -1104,20 +1014,10 @@ void SE_ClearProficiencyFields(void) {
     SE_hCredEditBox = NULL;
 }
 
-/* Fractional positions (of the 1918x1008 reference canvas) for each skill's
-   value box. Derived via OCR text detection directly against the actual
-   decoration artwork (tesseract), not visual guessing - confirmed positions
-   for 10 of 14; the remaining 4 (marked) use the consistent, OCR-verified
-   offset pattern (value sits ~55px right, ~28px below its label) applied to
-   labels whose own position OCR did confirm. */
+/* Fractional positions (of the 1918x1008 reference canvas) for each skill's value box. */
 typedef struct { const char *name; double fx, fy; } SkillPos;
 static const SkillPos g_skillPositions[] = {
-    /* Positions derived by OCR-detecting each label's bounding box AND
-       directly detecting its underline row in decoration_bg.png, then
-       taking the true midpoint between them - not an extrapolated offset.
-       Kept independent per-skill rather than shared per-row: auto-center
-       (below) nudges each one individually based on live pixel scans, so a
-       shared base value doesn't actually stay visually aligned anyway. */
+    /* Positions derived by OCR-detecting each label's bounding box AND directly detecting its. */
     {"Engineering", 0.111, 0.433},
     {"TechnicalAbilitySkill", 0.310, 0.433},
     {"CombatHacking", 0.182, 0.524},
@@ -1125,52 +1025,26 @@ static const SkillPos g_skillPositions[] = {
     {"Hacking", 0.251, 0.614},
     {"Demolition", 0.444, 0.613},
     {"IntelligenceSkill", 0.645, 0.427},
-    {"CoolSkill", 0.795, 0.430},     /* manually nudged down from 0.427 */
+    {"CoolSkill", 0.795, 0.430},     /* manually nudged down from 0.427. */
     {"ReflexesSkill", 0.551, 0.594},
     {"StrengthSkill", 0.903, 0.592},
     {"Gunslinger", 0.596, 0.754},
     {"Crafting", 0.864, 0.750},
     {"Espionage", 0.558, 0.917},
-    {"Stealth", 0.876, 0.918},       /* manually nudged down from 0.913 */
+    {"Stealth", 0.876, 0.918},       /* manually nudged down from 0.913. */
 };
 
-/* The top ~35% of the deco image is blank in the artwork (the topmost skill,
-   Engineering, doesn't start until fy=0.434) - that's where the reference
-   places the big Level/Street Cred numbers, a triangle, and a caption.
-   Positioning them as fractions of the SAME image rect (like the skill
-   icons above) means they grow and shrink together with everything else
-   instead of staying stuck at a tiny fixed size.
-
-   NOTE: level_triangle2.png / streetcred_triangle2.png turned out to be
-   broken source assets - neither actually contains a triangle shape, and
-   level_triangle2.png has "LEVEL" clipped to "LEVE" by its own canvas edge
-   (verified via OCR + pixel inspection, not something scaling can fix).
-   So the triangle and caption below are drawn programmatically instead of
-   pulled from those images. */
+/* The top ~35% of the deco image is blank in the artwork (the topmost skill, Engineering, doesn't start until fy=0.434) */
 #define LEVEL_FX          0.253
 #define CRED_FX           0.415
 #define BLOCK_TOP_FY       0.19
-#define SKILL_TOP_FY       0.40   /* Engineering icon starts at fy=0.434 - stop just above it */
-#define NUM_FONT_HFRAC     0.11   /* big-number font height as a fraction of decoH */
-#define TRI_HFRAC          0.07   /* triangle height as a fraction of decoH - half its original
-                                      height, i.e. the top half of the original triangle cut off */
+#define SKILL_TOP_FY       0.40   /* Engineering icon starts at fy=0.434. */
+#define NUM_FONT_HFRAC     0.11   /* big-number font height as a fraction of decoH. */
+#define TRI_HFRAC          0.07   /* triangle height as a fraction of decoH. */
 #define CAPTION_FONT_HFRAC 0.045
 #define GAP_HFRAC          0.012
-/* The Engineering/Technical Ability Skill LABEL text starts around fy=0.399,
-   but the ICON GRAPHICS above each label (the fist, the head) extend
-   noticeably higher than the text itself - using the label's own position
-   as the safety boundary left real visual overlap with the icon artwork
-   even when the text itself had a clear gap. Pulled back to give the icons
-   real headroom. */
-/* Directly measured (not estimated) via pixel scan of decoration_bg.png:
-   the topmost dark pixel of each icon graphic in the Engineering/Technical
-   Ability Skill row - the ICON artwork (the fist, etc), not the label
-   text, which is what kept getting used before and was consistently wrong
-   since icons extend well above their own label text.
-     Engineering icon top: y=372   TechnicalAbilitySkill icon top: y=394
-     CombatHacking icon top: y=402   Kenjutsu icon top: y=402
-   Using the topmost of all of them (372/1008) with a small margin purely
-   for anti-aliasing, not as a guess-buffer. */
+/* The Engineering/Technical Ability Skill LABEL text starts around fy=0.399, but the ICON. */
+/* Directly measured (not estimated) via pixel scan of decoration_bg.png: the topmost dark. */
 #define LABEL_ROW_TOP_FY (372.0 / 1008.0)
 #define ICON_SAFETY_MARGIN 8
 
@@ -1190,17 +1064,10 @@ void SE_GetLevelCredRects(DecoXform xform, RECT *levelNum, RECT *credNum, RECT *
 
     int numH = (int)(nfp * 1.3), numW = (int)(nfp * 2.1);
     int capH = (int)(cfp * 1.4), capW = (int)(cfp * 7.0);
-    int triH = (int)(TRI_HFRAC * decoH), triW = capW; /* matches the width of "STREET CRED" */
+    int triH = (int)(TRI_HFRAC * decoH), triW = capW; /* matches the width of "STREET CRED". */
     int gap2 = (int)(GAP_HFRAC * decoH);
 
-    /* Available budget is measured against where the label row ACTUALLY
-       renders (mapped through the same crop transform used for real
-       positioning below) - not a separate, disconnected fraction of decoH.
-       That mismatch used to let the position-clamp silently override the
-       gap guarantee on smaller windows, which is what caused the caption
-       to collide with Technical Ability Skill after resizing. Required
-       space: triangle + gap + one-and-a-half caption heights (matching
-       the backward-position formula exactly). */
+    /* Available budget is measured against where the label row ACTUALLY renders. */
     int labelRowTopY = SE_DecoMapY(xform, LABEL_ROW_TOP_FY) - ICON_SAFETY_MARGIN;
     int availBlockH = labelRowTopY - br.top;
     int requiredH = triH + gap2 + (int)(1.5 * capH);
@@ -1216,20 +1083,12 @@ void SE_GetLevelCredRects(DecoXform xform, RECT *levelNum, RECT *credNum, RECT *
     *numFontPx = nfp;
     *capFontPx = cfp;
 
-    /* Shift both blocks left together so the (rightmost) Street Cred
-       triangle's right edge lines up with the log box's right edge. */
+    /* Shift both blocks left together so the (rightmost) Street Cred triangle's right edge. */
     int logBoxRight = br.left + (int)(LOG_WIDTH_FRACTION * decoW);
     int credCx = logBoxRight - triW / 2;
     int levelCx = credCx - (int)((CRED_FX - LEVEL_FX) * decoW);
 
-    /* Position by working backward from where the Engineering/Technical
-       Ability Skill row's label text ACTUALLY renders on screen - mapped
-       through the same crop-aware transform the skill icons themselves
-       use (SE_DecoMapY), not a plain linear fraction of decoH, which doesn't
-       account for cropping and was why this drifted/overlapped before.
-       Reserves one more line the same height as the caption ("LEVEL").
-       The shrink above already guarantees this fits, so the br.top clamp
-       here is just a final safety net, not the primary mechanism. */
+    /* Position by working backward from where the Engineering/Technical Ability Skill row's. */
     int y = labelRowTopY - (int)(1.5 * capH) - gap2 - triH;
     if (y < br.top) y = br.top;
 
@@ -1253,7 +1112,7 @@ void SE_GetLevelCredRects(DecoXform xform, RECT *levelNum, RECT *credNum, RECT *
 }
 
 #define BTN_W 208
-#define BTN_H 49 /* 1.3x the original 160x38 */
+#define BTN_H 49 /* 1.3x the original 160x38. */
 
 void SE_RepositionButtons(void) {
     if (!SE_hLoadBtn || !SE_hSaveBtn) return;
@@ -1264,10 +1123,7 @@ void SE_RepositionButtons(void) {
     SE_GetLevelCredRects(xform, &levelNumR, &credNumR, &levelTriR, &credTriR,
         &levelCapR, &credCapR, &numFontPx, &capFontPx);
 
-    /* Save Changes' vertical center lands on the Level triangle's bottom
-       edge; Load Save keeps its usual stagger above-left of it. Clamped on
-       both ends: never low enough to reach the skill icon row, and never
-       high enough to overlap the info box above. */
+    /* Save Changes' vertical center lands on the Level triangle's bottom edge. */
     int saveBtnY = levelTriR.bottom - BTN_H / 2;
     int maxSaveBtnY = SE_DecoMapY(xform, LABEL_ROW_TOP_FY) - ICON_SAFETY_MARGIN - BTN_H - 10;
     if (saveBtnY > maxSaveBtnY) saveBtnY = maxSaveBtnY;
@@ -1286,17 +1142,13 @@ void SE_RepositionButtons(void) {
 void SE_RepositionInfoBox(void) {
     if (!SE_hInfoText) return;
     int availWidth = SE_g_currentClientWidth - 40;
-    int rightEdge = 20 + (int)(LOG_WIDTH_FRACTION * availWidth); /* matches log box's right edge */
+    int rightEdge = 20 + (int)(LOG_WIDTH_FRACTION * availWidth); /* matches log box's right edge. */
     int w = rightEdge - 20;
     if (w < 200) w = 200;
 
-    /* Centered in the gap between the path row's bottom and Load Save's
-       actual top (read directly from the button, already positioned by
-       SE_RepositionButtons at this point) rather than a fixed offset, so it
-       stays visually centered regardless of how far down the button ends
-       up sitting. */
+    /* Centered in the gap between the path row's bottom and Load Save's actual top. */
     int gapTop = PATHROW_Y + PATHROW_H;
-    int gapBottom = gapTop + (SE_GetButtonRowY() - gapTop); /* fallback if button not ready yet */
+    int gapBottom = gapTop + (SE_GetButtonRowY() - gapTop); /* fallback if button not ready yet. */
     if (SE_hLoadBtn) {
         RECT btnR;
         GetWindowRect(SE_hLoadBtn, &btnR);
@@ -1310,19 +1162,7 @@ void SE_RepositionInfoBox(void) {
     MoveWindow(SE_hInfoText, 20, y, w, INFOBOX_H, TRUE);
 }
 
-/* Scans the actual rendered artwork (not an offline copy) to find the true
-   vertical center between a label's bottom and its underline, for a given
-   screen position, and reports how far off the current guess was. Draws
-   the deco image into an offscreen buffer at the exact same source/dest
-   rects used for real painting, so what gets sampled is guaranteed to
-   match what's on screen - not a separate approximation.
-
-   Samples several columns across the number's width and takes the median
-   of each direction rather than trusting one column - icon artwork next
-   to a label is often tall/irregular enough that a single column can hit
-   the icon instead of the label, which previously flung several numbers
-   into the wrong place entirely. The applied shift is also clamped so one
-   bad reading can't move a box further than a small, safe nudge. */
+/* Scans the actual rendered artwork (not an offline copy) to find the true vertical center. */
 int SE_CompareInts(const void *a, const void *b) { return (*(const int *)a) - (*(const int *)b); }
 
 void SE_AutoCenterSkillNumbers(DecoXform xform, int skillBoxW, int skillBoxH) {
@@ -1400,9 +1240,7 @@ void SE_AutoCenterSkillNumbers(DecoXform xform, int skillBoxW, int skillBoxH) {
         if (nUp >= 4 && nDown >= 4) {
             qsort(ups, nUp, sizeof(int), SE_CompareInts);
             qsort(downs, nDown, sizeof(int), SE_CompareInts);
-            /* Require the samples to agree tightly with each other - if
-               some columns hit an icon instead of the label/underline,
-               the spread will be wide and we should not trust it. */
+            /* Require the samples to agree tightly with each other. */
             if ((ups[nUp - 1] - ups[0]) <= 6 && (downs[nDown - 1] - downs[0]) <= 6) {
                 clusterOk = 1;
             }
@@ -1450,10 +1288,7 @@ void SE_BuildProficiencyFields(void) {
     RECT br = xform.vis;
     int decoH = br.bottom - br.top;
 
-    /* Level / Street Cred: big numbers positioned above a programmatically
-       drawn triangle + caption (the source PNGs for those turned out to be
-       broken - see comment above SE_GetLevelCredRects). Font is unchanged from
-       the original: Bookman Old Style, bold - only the size now scales. */
+    /* Level / Street Cred: big numbers positioned above a programmatically drawn triangle +. */
     RECT levelNumR, credNumR, levelTriR, credTriR, levelCapR, credCapR;
     int bigFontPx, capFontPx;
     SE_GetLevelCredRects(xform, &levelNumR, &credNumR, &levelTriR, &credTriR,
@@ -1481,9 +1316,7 @@ void SE_BuildProficiencyFields(void) {
         if (k == 0) SE_hLevelEditBox = SE_hEditBoxes[i]; else SE_hCredEditBox = SE_hEditBoxes[i];
     }
 
-    /* Remaining skill value boxes, positioned to align with their icons in
-       the decoration image (which is drawn separately in WM_PAINT). Box
-       size and font scale with the image too instead of staying fixed. */
+    /* Remaining skill value boxes, positioned to align with their icons in the decoration image. */
     int skillFontPx = (int)(0.034 * decoH);
     if (skillFontPx < 12) skillFontPx = 12;
     if (skillFontPx > 40) skillFontPx = 40;
@@ -1508,10 +1341,10 @@ void SE_BuildProficiencyFields(void) {
                 break;
             }
         }
-        if (fx < 0) continue; /* unknown skill name - skip rather than guess */
+        if (fx < 0) continue; /* unknown skill name. */
 
         int cx = SE_DecoMapX(xform, fx);
-        int cy = SE_DecoMapY(xform, fy) + (int)(skillBoxH * 0.3); /* systematic correction - numbers were consistently sitting slightly too high */
+        int cy = SE_DecoMapY(xform, fy) + (int)(skillBoxH * 0.3); /* systematic correction. */
 
         char valStr[16];
         snprintf(valStr, sizeof(valStr), "%d", SE_g_save.proficiencies[i].currentValue);
@@ -1546,9 +1379,7 @@ void SE_GetDefaultSavesFolder(char *out, size_t outSize) {
     }
 }
 
-/* Save Location: lets the user point at a non-standard saves folder (for
-   unconventional install locations), used as the starting point the next
-   time they browse for a file. */
+/* Save Location: lets the user point at a non-standard saves folder (for unconventional install locations) */
 void SE_ChooseSavesFolder(void) {
     char initialDir[MAX_PATH];
     SE_GetDefaultSavesFolder(initialDir, sizeof(initialDir));
@@ -1573,9 +1404,7 @@ void SE_ChooseSavesFolder(void) {
     }
 }
 
-/* Load Save now does the browse-for-file step itself instead of requiring
-   it separately - returns TRUE if the user actually picked a file (so the
-   caller knows whether to go on and load it). */
+/* Load Save now does the browse-for-file step itself instead of requiring it separately. */
 BOOL SE_BrowseForSaveFile(void) {
     char path[MAX_PATH] = "";
     char initialDir[MAX_PATH];
@@ -1630,7 +1459,7 @@ void SE_LoadSaveFile(void) {
 void SE_SaveChangesToFile(void) {
     if (!SE_g_saveLoaded) { SE_AppendStatus("No save loaded."); return; }
 
-    /* Read edited values back from the UI into the engine struct */
+    /* Read edited values back from the UI into the engine struct. */
     for (int i = 0; i < SE_g_save.proficiencyCount; i++) {
         char valStr[16];
         GetWindowTextA(SE_hEditBoxes[i], valStr, sizeof(valStr));
@@ -1641,13 +1470,13 @@ void SE_SaveChangesToFile(void) {
     char origPath[MAX_PATH];
     GetWindowTextA(SE_hPathBox, origPath, sizeof(origPath));
 
-    /* Automatic backup - never touch the original without one */
+    /* Automatic backup. */
     char backupPath[MAX_PATH + 8];
     snprintf(backupPath, sizeof(backupPath), "%s.bak", origPath);
 
     DWORD attrs = GetFileAttributesA(backupPath);
     if (attrs == INVALID_FILE_ATTRIBUTES) {
-        /* only back up once - don't overwrite an existing backup on repeated saves */
+        /* only back up once. */
         CopyFileA(origPath, backupPath, FALSE);
         SE_AppendStatus("Created backup (.bak) of original save.");
     }
@@ -1662,7 +1491,7 @@ void SE_SaveChangesToFile(void) {
 
     SE_AppendStatus("Saved successfully! Reloading to verify...");
 
-    /* Verify by reloading our own output */
+    /* Verify by reloading our own output. */
     SaveFile verifySf;
     if (SaveFile_Load(&verifySf, origPath)) {
         int allMatch = 1;
@@ -1708,7 +1537,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 WS_VISIBLE | WS_CHILD | SS_CENTER, 20, 15, 70, 20, hwnd, NULL, SE_hInst, NULL);
             SendMessageA(SE_hSaveLabel, WM_SETFONT, (WPARAM)hDefaultFont, TRUE);
 
-            /* Clickable "field" showing the path - not editable, click opens browse */
+            /* Clickable "field" showing the path. */
             SE_hPathBox = CreateWindowA("STATIC", "(click here to choose a save file)",
                 WS_VISIBLE | WS_CHILD | WS_BORDER | SS_NOTIFY | SS_LEFT | SS_CENTERIMAGE,
                 95, 13, 480, 24, hwnd, (HMENU)SE_ID_PATH_BOX, SE_hInst, NULL);
@@ -1801,23 +1630,17 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SE_RepositionButtons();
             SE_RepositionInfoBox();
 
-            /* Screenshot positioned in the same crop-mapped coordinate
-               space as the rest of the artwork, at the reference's
-               measured location, so it scales and moves in lockstep with
-               everything else. */
+            /* Screenshot positioned in the same crop-mapped coordinate space as the rest of the. */
             SE_g_imageRect = SE_GetScreenshotRect(SE_GetDecoXform());
             InvalidateRect(hwnd, NULL, TRUE);
 
             if (SE_g_saveLoaded) {
-                SE_BuildProficiencyFields(); /* reflow grid to fit new width, also repositions status box */
+                SE_BuildProficiencyFields(); /* reflow grid to fit new width, also repositions status box. */
             } else {
                 SE_RepositionStatusBox();
             }
 
-            /* Dump the full computed layout state to the log - useful
-               ground truth when diagnosing layout issues from a
-               screenshot. Left enabled permanently, not just for
-               debugging sessions. */
+            /* Dump the full computed layout state to the log. */
             {
                 DecoXform dbgXform = SE_GetDecoXform();
                 RECT dbgBr = dbgXform.vis;
@@ -1919,9 +1742,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 GdipDeleteGraphics(graphics);
             }
 
-            /* Level / Street Cred triangle + caption, drawn with plain GDI
-               instead of the (broken) source PNGs - see the comment above
-               SE_GetLevelCredRects for why. */
+            /* Level / Street Cred triangle + caption, drawn with plain GDI instead of the (broken) */
             if (SE_g_bodyDecoImage) {
                 DecoXform paintXform = SE_GetDecoXform();
                 RECT levelNumR, credNumR, levelTriR, credTriR, levelCapR, credCapR;
@@ -1933,10 +1754,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 HPEN hOldPen = (HPEN)SelectObject(hdc, hTriPen);
                 HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
 
-                /* Side angle ~40 degrees from the base (within the requested
-                   35-45 range) instead of an arbitrary width fraction, so
-                   the sides are visibly steeper/more pointed like the
-                   reference regardless of how wide the triangle ends up. */
+                /* Side angle ~40 degrees from the base (within the requested 35-45 range) instead of an. */
                 double sideAngleDeg = 40.0;
                 int levelTriH = levelTriR.bottom - levelTriR.top;
                 int levelInset = (int)(levelTriH / tan(sideAngleDeg * 3.14159265 / 180.0));
@@ -1975,11 +1793,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 int oldBkMode = SetBkMode(hdc, TRANSPARENT);
                 COLORREF oldColor = SetTextColor(hdc, RGB(20, 20, 40));
 
-                /* Center each caption's own tightly-measured width on its
-                   triangle's center, rather than DT_CENTER inside a shared
-                   uniform-width box sized for the longer "STREET CRED" -
-                   that left "LEVEL" looking off-center within its own
-                   much-wider-than-needed box. */
+                /* Center each caption's own tightly-measured width on its triangle's center, rather than. */
                 int levelCx = (levelCapR.left + levelCapR.right) / 2;
                 int credCx = (credCapR.left + credCapR.right) / 2;
 
@@ -2014,9 +1828,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SE_SaveChangesToFile();
             } else if (HIWORD(wParam) == EN_CHANGE &&
                        GetDlgCtrlID((HWND)lParam) >= SE_ID_FIRST_EDIT) {
-                /* All these boxes are transparent (artwork shows through),
-                   so a full repaint is needed on edit or the old digit's
-                   pixels won't get erased before the new ones draw. */
+                /* All these boxes are transparent (artwork shows through), so a full repaint is needed on. */
                 RECT r;
                 GetWindowRect((HWND)lParam, &r);
                 POINT p1 = {r.left, r.top}, p2 = {r.right, r.bottom};
@@ -2032,10 +1844,7 @@ LRESULT CALLBACK SE_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-/* One-time setup: GDI+, fonts, and artwork resources. Called once from the
-   launcher's WinMain. Does NOT create a window or run a message loop - the
-   save editor's controls become children of the launcher's own window,
-   created lazily by SE_ActivateEditor() the first time it's opened. */
+/* One-time setup: GDI+, fonts, and artwork resources. */
 void SE_InitOnce(HINSTANCE hInstance) {
     SE_hInst = hInstance;
 
@@ -2062,29 +1871,22 @@ void SE_Shutdown(void) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Main window                                                            */
+/* Main window */
 /* ---------------------------------------------------------------------- */
 
-
-/* ------------------------------------------------------------------ */
-/* New image-based main menu (replaces the old native-controls        */
-/* launcher UI). All art is 1918x974 native canvas, layered with      */
-/* alpha transparency and uniformly scaled/letterboxed to fit the     */
-/* window. All symbols prefixed MENU_ to avoid collisions.            */
-/* ------------------------------------------------------------------ */
+/* New image-based main menu. All symbols prefixed MENU_. */
 
 #define MENU_NATIVE_W 1918
 #define MENU_NATIVE_H 974
 
-/* GDI+ doesn't always export FrameDimensionTime/PropertyTagFrameDelay as
-   linkable symbols on mingw - defined directly to be safe. */
+/* GDI+ doesn't always export FrameDimensionTime/PropertyTagFrameDelay as linkable symbols. */
 static const GUID MENU_FrameDimensionTime =
     {0x6aedbd6d, 0x3fb5, 0x418a, {0x83, 0xa6, 0x7f, 0x45, 0x22, 0x9d, 0xc8, 0x72}};
 #define MENU_PROPERTY_TAG_FRAME_DELAY 0x5100
 
 typedef struct {
     GpImage *img;
-    RECT bbox;      /* non-transparent pixel bounding box, native coords */
+    RECT bbox;      /* non-transparent pixel bounding box, native coords. */
     int valid;
 } MenuImg;
 
@@ -2092,17 +1894,17 @@ typedef struct {
     GpImage *img;
     UINT frameCount;
     UINT *delaysMs;
-    GpBitmap **cachedFrames; /* pre-decoded, ready-to-draw frames */
+    GpBitmap **cachedFrames; /* pre-decoded, ready-to-draw frames. */
     int cacheW, cacheH;
     UINT currentFrame;
     BOOL playing;
     DWORD lastTickMs;
 } MenuGif;
 
-/* Static layer images */
+/* Static layer images. */
 MenuImg gMB_Background, gMB_City, gMB_Moon, gMB_DavidMemoir;
-MenuImg gMB_Button[10];       /* 1..9 used */
-MenuImg gMB_ButtonInv[10];    /* 0 = no inverted variant */
+MenuImg gMB_Button[10];       /* 1..9 used. */
+MenuImg gMB_ButtonInv[10];    /* 0 = no inverted variant. */
 MenuImg gMB_Check4, gMB_Checked4, gMB_Check5, gMB_Checked5, gMB_Check8, gMB_Checked8;
 MenuImg gMB_Settings;
 MenuImg gMB_Title, gMB_TitleInv;
@@ -2110,46 +1912,45 @@ MenuImg gMB_Title, gMB_TitleInv;
 /* Cycling background images (folder-driven, embedded fallback) */
 #define MENU_MAX_CYCLE_IMAGES 32
 MenuImg gMB_CycleNormal[MENU_MAX_CYCLE_IMAGES];
-MenuImg gMB_CycleInverted[MENU_MAX_CYCLE_IMAGES]; /* .valid=0 if none for that slot */
+MenuImg gMB_CycleInverted[MENU_MAX_CYCLE_IMAGES]; /* .valid=0 if none for that slot. */
 int gMB_CycleCount = 0;
 int gMB_CycleIndex = 0;
 BOOL gMB_CycleShowInverted = FALSE;
 DWORD gMB_CycleLastSwitchMs = 0;
 #define MENU_CYCLE_INTERVAL_MS 4000
 
-/* GIF players */
+/* GIF players. */
 MenuGif gMB_GifTitleN2I, gMB_GifTitleI2N, gMB_GifLaunch;
 
-/* Title state machine */
+/* Title state machine. */
 #define MENU_TITLE_NORMAL       0
 #define MENU_TITLE_PLAYING_N2I  1
 #define MENU_TITLE_INVERTED     2
 #define MENU_TITLE_PLAYING_I2N  3
 int gMB_TitleState = MENU_TITLE_NORMAL;
 
-/* Launch gif overlay */
+/* Launch gif overlay. */
 BOOL gMB_LaunchGifPlaying = FALSE;
-BOOL gMB_LaunchGifPendingLaunch = FALSE; /* fire the real launch once gif ends */
+BOOL gMB_LaunchGifPendingLaunch = FALSE; /* fire the real launch once gif ends. */
 
 /* Console visibility (was always-visible; now toggled) */
 BOOL gMB_ConsoleVisible = FALSE;
 
-/* Check states - default ON */
-BOOL gMB_Check4On = TRUE; /* deploy REDmod-format mods */
-BOOL gMB_Check5On = TRUE; /* dynamic priority */
-BOOL gMB_Check8On = TRUE; /* skip loading screen - default on */
+/* Check states - default ON. */
+BOOL gMB_Check4On = TRUE; /* deploy REDmod-format mods. */
+BOOL gMB_Check5On = TRUE; /* dynamic priority. */
+BOOL gMB_Check8On = TRUE; /* skip loading screen. */
 
-/* Settings panel (buttons 4/5/8 and their checkboxes) is hidden by
-   default and only shown while this is toggled on via the gear icon. */
+/* Settings panel (buttons 4/5/8 and their checkboxes) is hidden by default and only shown. */
 BOOL gMB_SettingsVisible = FALSE;
 
-int gMB_HoveredButton = 0; /* 0 = none, else 1..7 */
+int gMB_HoveredButton = 0; /* 0 = none, else 1. */
 
 HDC gMB_MemDC = NULL;
 HBITMAP gMB_MemBmp = NULL;
 int gMB_MemW = 0, gMB_MemH = 0;
 
-/* ---- loading + bbox helpers ---- */
+/* ---- loading + bbox helpers ----. */
 
 GpImage *MENU_LoadPngResource(const char *resourceName) {
     HMODULE hMod = GetModuleHandleA(NULL);
@@ -2175,10 +1976,7 @@ GpImage *MENU_LoadPngResource(const char *resourceName) {
     return img;
 }
 
-/* Scans the image's alpha channel for the tightest non-transparent
-   bounding box - used for hover/click hit-testing so each button's
-   clickable area matches its actual drawn shape, not the full
-   1918x974 canvas. */
+/* Scans the image's alpha channel for the tightest non-transparent bounding box. */
 void MENU_ComputeBBox(GpImage *img, RECT *bbox) {
     bbox->left = bbox->top = bbox->right = bbox->bottom = 0;
     if (!img) return;
@@ -2198,7 +1996,7 @@ void MENU_ComputeBBox(GpImage *img, RECT *bbox) {
 
     int minX = (int)w, minY = (int)h, maxX = -1, maxY = -1;
     BYTE *base = (BYTE *)bd.Scan0;
-    /* Sample every 2nd pixel for speed - plenty precise for UI hit-boxes */
+    /* Sample every 2nd pixel for speed. */
     for (UINT y = 0; y < h; y += 2) {
         UINT32 *row = (UINT32 *)(base + (size_t)y * bd.Stride);
         for (UINT x = 0; x < w; x += 2) {
@@ -2236,7 +2034,7 @@ GpImage *MENU_LoadPngFile(const char *path) {
     return img;
 }
 
-/* ---- GIF playback ---- */
+/* ---- GIF playback ----. */
 
 void MENU_GifLoad(MenuGif *g, GpImage *img) {
     memset(g, 0, sizeof(*g));
@@ -2253,7 +2051,7 @@ void MENU_GifLoad(MenuGif *g, GpImage *img) {
             LONG *vals = (LONG *)item->value;
             for (UINT i = 0; i < g->frameCount; i++) {
                 UINT idx = (item->length / sizeof(LONG) > i) ? i : 0;
-                g->delaysMs[i] = (UINT)(vals[idx] * 10); /* 1/100s -> ms */
+                g->delaysMs[i] = (UINT)(vals[idx] * 10); /* 1/100s -> ms. */
                 if (g->delaysMs[i] < 20) g->delaysMs[i] = 30;
             }
         } else {
@@ -2264,11 +2062,7 @@ void MENU_GifLoad(MenuGif *g, GpImage *img) {
         for (UINT i = 0; i < g->frameCount; i++) g->delaysMs[i] = 100;
     }
 
-    /* Pre-decode every frame once, at a resolution that's still sharp when
-       scaled up for display but keeps memory/decode time reasonable
-       (GdipImageSelectActiveFrame itself is expensive per-call on a large
-       multi-frame gif - doing it here, once per frame, instead of on every
-       ~30ms playback tick is the actual fix for playback smoothness). */
+    /* Pre-decode every frame once, at a resolution that's still sharp when scaled up for. */
     g->cacheW = 1280;
     g->cacheH = (int)(800.0 * MENU_NATIVE_H / MENU_NATIVE_W);
     g->cachedFrames = (GpBitmap **)malloc(sizeof(GpBitmap *) * g->frameCount);
@@ -2296,20 +2090,14 @@ void MENU_GifStart(MenuGif *g) {
     g->lastTickMs = GetTickCount();
 }
 
-/* Advances the gif by however much time has passed; returns TRUE the
-   instant it finishes its last frame (caller reacts once, then this
-   stops advancing since g->playing is cleared). No GDI+ calls here at
-   all now - just an index bump, since frames are pre-decoded. */
+/* Advances the gif by however much time has passed. */
 BOOL MENU_GifTick(MenuGif *g) {
     if (!g->playing || !g->img) return FALSE;
     DWORD now = GetTickCount();
     DWORD elapsed = now - g->lastTickMs;
     if (elapsed < g->delaysMs[g->currentFrame]) return FALSE;
 
-    /* Advance by however many frames' worth of real time have actually
-       passed, not just one - if a frame ever takes longer to paint than
-       its budget, this catches back up to the correct frame instead of
-       quietly falling into slow motion. */
+    /* Advance by however many frames' worth of real time have actually passed, not just one. */
     while (elapsed >= g->delaysMs[g->currentFrame]) {
         elapsed -= g->delaysMs[g->currentFrame];
         g->currentFrame++;
@@ -2320,7 +2108,7 @@ BOOL MENU_GifTick(MenuGif *g) {
             return TRUE;
         }
     }
-    g->lastTickMs = now - elapsed; /* keep the leftover fractional time */
+    g->lastTickMs = now - elapsed; /* keep the leftover fractional time. */
     return FALSE;
 }
 
@@ -2330,7 +2118,7 @@ GpImage *MENU_GifCurrentFrame(MenuGif *g) {
     return (GpImage *)g->cachedFrames[g->currentFrame];
 }
 
-/* ---- cycling images: folder scan with embedded fallback ---- */
+/* ---- cycling images: folder scan with embedded fallback ----. */
 
 void MENU_LoadCycleImages(void) {
     gMB_CycleCount = 0;
@@ -2358,7 +2146,7 @@ void MENU_LoadCycleImages(void) {
             slot->valid = (slot->img != NULL);
             if (slot->valid) MENU_ComputeBBox(slot->img, &slot->bbox);
 
-            /* matching "<name>_inverted.png" in the Inverted subfolder */
+            /* matching "<name>_inverted.png" in the Inverted subfolder. */
             char baseName[MAX_PATH];
             strncpy(baseName, fd.cFileName, sizeof(baseName) - 1);
             baseName[sizeof(baseName) - 1] = '\0';
@@ -2383,9 +2171,7 @@ void MENU_LoadCycleImages(void) {
     }
 
     if (gMB_CycleCount == 0) {
-        /* Embedded fallback: Image 1/2/3, with Image 2 having an inverted
-           click variant - guarantees the menu works out of the box even
-           with no MenuImages folder present. */
+        /* Embedded fallback: Image 1/2/3, with Image 2 having an inverted click variant. */
         MENU_LoadImg(&gMB_CycleNormal[0], "IDP_IMAGE_1_PNG");
         gMB_CycleInverted[0].valid = 0;
         MENU_LoadImg(&gMB_CycleNormal[1], "IDP_IMAGE_2_PNG");
@@ -2400,7 +2186,7 @@ void MENU_LoadCycleImages(void) {
     gMB_CycleLastSwitchMs = GetTickCount();
 }
 
-/* ---- one-time init ---- */
+/* ---- one-time init ----. */
 
 void MENU_InitOnce(void) {
     MENU_LoadImg(&gMB_Background, "IDP_BACKGROUND_PNG");
@@ -2441,7 +2227,7 @@ void MENU_InitOnce(void) {
     MENU_LoadCycleImages();
 }
 
-/* ---- layout: uniform scale + letterbox to fit window ---- */
+/* ---- layout: uniform scale + letterbox to fit window ----. */
 
 typedef struct { int x, y, w, h; double scale; } MenuLayout;
 
@@ -2476,7 +2262,7 @@ BOOL MENU_PtInBBox(int nx, int ny, RECT *bbox) {
     return (nx >= bbox->left && nx < bbox->right && ny >= bbox->top && ny < bbox->bottom);
 }
 
-/* ---- drawing ---- */
+/* ---- drawing ----. */
 
 void MENU_DrawImg(GpGraphics *g, MenuImg *m, MenuLayout L) {
     if (!m->valid) return;
@@ -2494,7 +2280,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
     int cw = clientRect.right, ch = clientRect.bottom;
     if (cw <= 0 || ch <= 0) return;
 
-    /* Offscreen buffer to avoid flicker from this many layered draws */
+    /* Offscreen buffer to avoid flicker from this many layered draws. */
     if (!gMB_MemDC || gMB_MemW != cw || gMB_MemH != ch) {
         if (gMB_MemBmp) DeleteObject(gMB_MemBmp);
         if (gMB_MemDC) DeleteDC(gMB_MemDC);
@@ -2504,10 +2290,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
         gMB_MemW = cw; gMB_MemH = ch;
     }
 
-    /* Full-screen launch gif completely covers everything underneath -
-       compositing all ~15 menu layers every frame while none of it is even
-       visible was pure wasted work, and was a big part of why it felt
-       slow. */
+    /* Full-screen launch gif completely covers everything underneath. */
     if (gMB_LaunchGifPlaying && gMB_GifLaunch.img) {
         GpGraphics *g = NULL;
         GdipCreateFromHDC(gMB_MemDC, &g);
@@ -2521,11 +2304,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
 
     MenuLayout L = MENU_GetLayout(cw, ch);
 
-    /* Static-layer cache: Background/Cycle-image/City/Moon/Buttons/Checks
-       don't change during title-gif playback (the only thing animating
-       then is the title itself), so recompositing all of them on every
-       ~30ms tick was the other big cost. Only rebuilt when something in
-       this set actually changes (hover, cycle image, checks, resize). */
+    /* Static-layer cache: Background/Cycle-image/City/Moon/Buttons/Checks don't change during. */
     if (!gMB_CacheDC || gMB_CacheW != cw || gMB_CacheH != ch) {
         if (gMB_CacheBmp) DeleteObject(gMB_CacheBmp);
         if (gMB_CacheDC) DeleteDC(gMB_CacheDC);
@@ -2558,7 +2337,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
         MENU_DrawImg(cg, &gMB_City, L);
         MENU_DrawImg(cg, &gMB_Moon, L);
         for (int i = 1; i <= 9; i++) {
-            if (i == 4 || i == 5 || i == 8) continue; /* part of the settings panel, drawn below */
+            if (i == 4 || i == 5 || i == 8) continue; /* part of the settings panel, drawn below. */
             MenuImg *img = &gMB_Button[i];
             if (gMB_HoveredButton == i && gMB_ButtonInv[i].valid) img = &gMB_ButtonInv[i];
             MENU_DrawImg(cg, img, L);
@@ -2572,11 +2351,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
             MENU_DrawImg(cg, gMB_Check8On ? &gMB_Checked8 : &gMB_Check8, L);
         }
         MENU_DrawImg(cg, &gMB_Settings, L);
-        /* David Memoir's drawn area (bottom-right) never overlaps Title's
-           (top-left), verified against both PNGs' actual alpha bounds, so
-           caching it here alongside the other static layers is visually
-           identical to drawing it after the title every frame - but saves
-           a full-canvas GDI+ draw on every single animation tick. */
+        /* David Memoir's drawn area (bottom-right) never overlaps Title's (top-left), verified. */
         MENU_DrawImg(cg, &gMB_DavidMemoir, L);
         GdipDeleteGraphics(cg);
         gMB_CacheDirty = FALSE;
@@ -2589,7 +2364,7 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
     GdipSetInterpolationMode(g, InterpolationModeBilinear);
     GdipSetCompositingQuality(g, CompositingQualityHighSpeed);
 
-    /* Title: static image, or the active gif frame while animating */
+    /* Title: static image, or the active gif frame while animating. */
     if (gMB_TitleState == MENU_TITLE_PLAYING_N2I && gMB_GifTitleN2I.img) {
         GdipDrawImageRectI(g, MENU_GifCurrentFrame(&gMB_GifTitleN2I), L.x, L.y, L.w, L.h);
     } else if (gMB_TitleState == MENU_TITLE_PLAYING_I2N && gMB_GifTitleI2N.img) {
@@ -2606,13 +2381,12 @@ void MENU_Paint(HWND hwnd, HDC hdc, RECT clientRect) {
 }
 
 /* ------------------------------------------------------------------ */
-/* New menu interaction: hover, click dispatch, animation ticking      */
+/* New menu interaction: hover, click dispatch, animation ticking. */
 /* ------------------------------------------------------------------ */
 
 #define MENU_TIMER_ANIM 950
 
-/* Forward declarations of launcher actions this wires into (defined
-   elsewhere in the merged file). */
+/* Forward declarations of launcher actions this wires into (defined elsewhere in the merged file) */
 void RunNativeConflictScan(void);
 void BrowseForArchivesFolder(void);
 void SwitchToSaveEditor(HWND hwnd);
@@ -2634,12 +2408,7 @@ void MENU_UpdateConsoleVisibility(HWND hwnd) {
         MoveWindow(hStatusText, consoleLeft, consoleTop,
             consoleRight - consoleLeft, consoleBottom - consoleTop, TRUE);
 
-        /* A real "Close" button living on top of the console itself - the
-           console is a native window and always renders over (and
-           swallows clicks meant for) the buttons drawn underneath it, so
-           relying on clicking Button 6 again to close it doesn't work
-           once it's covered. This is always reachable regardless of
-           where any drawn button ends up. */
+        /* A real "Close" button living on top of the console itself. */
         if (!hConsoleCloseBtn) {
             HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             hConsoleCloseBtn = CreateWindowA("BUTTON", "Close Console",
@@ -2658,10 +2427,7 @@ void MENU_UpdateConsoleVisibility(HWND hwnd) {
 }
 
 void MENU_StartLaunch(HWND hwnd) {
-    /* Deploy immediately (so any status text queued shows once the
-       console is opened) then either play the fullscreen loading gif (real
-       launch fires when it finishes) or, if skip-loading-screen is on,
-       launch immediately instead. */
+    /* Deploy immediately (so any status text queued shows once the console is opened) then. */
     int deploy = gMB_Check4On;
     int dynamicPriority = gMB_Check5On;
     int skipLoadingScreen = gMB_Check8On;
@@ -2671,13 +2437,13 @@ void MENU_StartLaunch(HWND hwnd) {
 
     if (!deployFailed) {
         if (skipLoadingScreen) {
-            LaunchGame(0 /* already deployed above */, dynamicPriority);
+            LaunchGame(0 /* already deployed above. */, dynamicPriority);
             ShowWindow(hwnd, SW_MINIMIZE);
         } else {
             gMB_LaunchGifPendingLaunch = TRUE;
             gMB_LaunchGifPlaying = TRUE;
             MENU_GifStart(&gMB_GifLaunch);
-            /* stash dynamicPriority choice for when the gif finishes */
+            /* stash dynamicPriority choice for when the gif finishes. */
             gMB_Check5On = dynamicPriority;
         }
     } else {
@@ -2687,9 +2453,7 @@ void MENU_StartLaunch(HWND hwnd) {
     InvalidateRect(hwnd, NULL, TRUE);
 }
 
-/* Hit-tests topmost-first, matching the actual paint z-order. Returns a
-   simple code: 0=none, 1..7=button, 100=check4, 101=check5, 102=check8,
-   103=settings icon, 200=title, 300=cycleimage. */
+/* Hit-tests topmost-first, matching the actual paint z-order. */
 int MENU_HitTest(int nx, int ny) {
     if (gMB_Title.valid && gMB_TitleState != MENU_TITLE_PLAYING_N2I && gMB_TitleState != MENU_TITLE_PLAYING_I2N) {
         RECT *b = (gMB_TitleState == MENU_TITLE_INVERTED) ? &gMB_TitleInv.bbox : &gMB_Title.bbox;
@@ -2714,7 +2478,7 @@ int MENU_HitTest(int nx, int ny) {
 }
 
 void MENU_OnLButtonDown(HWND hwnd, int sx, int sy) {
-    if (gMB_LaunchGifPlaying) return; /* ignore input during launch animation */
+    if (gMB_LaunchGifPlaying) return; /* ignore input during launch animation. */
 
     RECT rc;
     GetClientRect(hwnd, &rc);
@@ -2724,43 +2488,43 @@ void MENU_OnLButtonDown(HWND hwnd, int sx, int sy) {
 
     int hit = MENU_HitTest(nx, ny);
     switch (hit) {
-        case 1: /* check mod conflicts */
+        case 1: /* check mod conflicts. */
             gMB_ConsoleVisible = TRUE;
             MENU_UpdateConsoleVisibility(hwnd);
             RunNativeConflictScan();
             break;
-        case 2: /* launch game */
+        case 2: /* launch game. */
             MENU_StartLaunch(hwnd);
             break;
-        case 3: /* edit saves */
+        case 3: /* edit saves. */
             SwitchToSaveEditor(hwnd);
             break;
-        case 6: /* toggle console */
+        case 6: /* toggle console. */
             gMB_ConsoleVisible = !gMB_ConsoleVisible;
             MENU_UpdateConsoleVisibility(hwnd);
             break;
-        case 7: /* mod folder */
+        case 7: /* mod folder. */
             BrowseForArchivesFolder();
             break;
-        case 9: /* mod manager - placeholder, not implemented yet */
+        case 9: /* mod manager - placeholder, not implemented yet. */
             break;
-        case 100: /* deploy redmod check toggle */
+        case 100: /* deploy redmod check toggle. */
             gMB_Check4On = !gMB_Check4On;
             MENU_InvalidateCache();
             break;
-        case 101: /* dynamic priority check toggle */
+        case 101: /* dynamic priority check toggle. */
             gMB_Check5On = !gMB_Check5On;
             MENU_InvalidateCache();
             break;
-        case 102: /* skip loading screen check toggle */
+        case 102: /* skip loading screen check toggle. */
             gMB_Check8On = !gMB_Check8On;
             MENU_InvalidateCache();
             break;
-        case 103: /* settings panel visibility toggle */
+        case 103: /* settings panel visibility toggle. */
             gMB_SettingsVisible = !gMB_SettingsVisible;
             MENU_InvalidateCache();
             break;
-        case 200: /* title click */
+        case 200: /* title click. */
             if (gMB_TitleState == MENU_TITLE_NORMAL) {
                 gMB_TitleState = MENU_TITLE_PLAYING_N2I;
                 MENU_GifStart(&gMB_GifTitleN2I);
@@ -2769,7 +2533,7 @@ void MENU_OnLButtonDown(HWND hwnd, int sx, int sy) {
                 MENU_GifStart(&gMB_GifTitleI2N);
             }
             break;
-        case 300: /* cycle image click - temporary inverted swap for Image 2-style entries */
+        case 300: /* cycle image click. */
             if (gMB_CycleInverted[gMB_CycleIndex].valid) {
                 gMB_CycleShowInverted = !gMB_CycleShowInverted;
                 MENU_InvalidateCache();
@@ -2799,8 +2563,7 @@ void MENU_OnMouseMove(HWND hwnd, int sx, int sy) {
     }
 }
 
-/* Advances all active animations; called on a fast repeating timer.
-   Returns TRUE if anything changed (caller should repaint). */
+/* Advances all active animations. */
 BOOL MENU_Tick(HWND hwnd) {
     BOOL changed = FALSE;
 
@@ -2821,7 +2584,7 @@ BOOL MENU_Tick(HWND hwnd) {
             gMB_LaunchGifPlaying = FALSE;
             if (gMB_LaunchGifPendingLaunch) {
                 gMB_LaunchGifPendingLaunch = FALSE;
-                LaunchGame(0 /* already deployed above */, gMB_Check5On);
+                LaunchGame(0 /* already deployed above. */, gMB_Check5On);
                 ShowWindow(hwnd, SW_MINIMIZE);
             }
         }
@@ -2834,7 +2597,7 @@ BOOL MENU_Tick(HWND hwnd) {
             gMB_CycleLastSwitchMs = now;
             gMB_CycleIndex = (gMB_CycleIndex + 1) % gMB_CycleCount;
             MENU_InvalidateCache();
-            gMB_CycleShowInverted = FALSE; /* always resumes normal on its next turn */
+            gMB_CycleShowInverted = FALSE; /* always resumes normal on its next turn. */
             changed = TRUE;
         }
     }
@@ -2842,15 +2605,12 @@ BOOL MENU_Tick(HWND hwnd) {
     return changed;
 }
 
-/* Switches the (single, shared) window's content between the launcher's
-   own controls and the save editor's, instead of launching a separate
-   process/window. The save editor's controls are created lazily on first
-   use via SE_WndProc's own WM_CREATE handler. */
+/* Switches the (single, shared) window's content between the launcher's own controls and. */
 void SwitchToSaveEditor(HWND hwnd) {
     gViewMode = MODE_SAVEEDITOR;
-    ShowWindow(hStatusText, SW_HIDE); /* launcher's own console */
+    ShowWindow(hStatusText, SW_HIDE); /* launcher's own console. */
     if (hConsoleCloseBtn) ShowWindow(hConsoleCloseBtn, SW_HIDE);
-    if (hButtonBack) ShowWindow(hButtonBack, SW_HIDE); /* SV2 draws+hit-tests its own Back to Launcher */
+    if (hButtonBack) ShowWindow(hButtonBack, SW_HIDE); /* SV2 draws+hit-tests its own Back to Launcher. */
 
     if (!gSaveEditorActivated) {
         SE_WndProc(hwnd, WM_CREATE, 0, 0);
@@ -2865,9 +2625,7 @@ void SwitchToSaveEditor(HWND hwnd) {
         SendMessageA(hwnd, WM_SIZE, 0, MAKELPARAM(rc.right, rc.bottom));
     }
 
-    /* All of the old skin's visual controls are replaced by SV2's drawn
-       art - only the proficiency edit boxes are reused (repositioned
-       below), everything else stays hidden. */
+    /* All of the old skin's visual controls are replaced by SV2's drawn art. */
     ShowWindow(SE_hSaveLabel, SW_HIDE);
     ShowWindow(SE_hPathBox, SW_HIDE);
     ShowWindow(SE_hHelpBtn, SW_HIDE);
@@ -2903,15 +2661,15 @@ void SwitchToLauncher(HWND hwnd) {
     extern HWND SV2_hLevelCredCaptionOverlay;
     if (SV2_hLevelCredCaptionOverlay) ShowWindow(SV2_hLevelCredCaptionOverlay, SW_HIDE);
 
-    MENU_UpdateConsoleVisibility(hwnd); /* restores whatever the console's state was */
+    MENU_UpdateConsoleVisibility(hwnd); /* restores whatever the console's state was. */
 
     InvalidateRect(hwnd, NULL, TRUE);
 }
 
 /* ------------------------------------------------------------------ */
-/* New image-based save editor (replaces SE_ system's rendering).      */
-/* All symbols prefixed SV2_ to avoid collisions. Reuses SaveFile_*    */
-/* from saveengine.h for the actual data load/save logic.              */
+/* New image-based save editor (replaces SE_ system's rendering). */
+/* All symbols prefixed SV2_ to avoid collisions. */
+/* from saveengine. */
 /* ------------------------------------------------------------------ */
 
 #define SV2_NATIVE_W 1918
@@ -2927,12 +2685,12 @@ typedef struct {
 SV2Img SV2_Background, SV2_DavidsHead, SV2_DavidsJacket, SV2_Sandevistan;
 SV2Img SV2_SaveLocationBtn, SV2_Shot, SV2_OutsideShapes, SV2_Image;
 SV2Img SV2_LocationPin, SV2_LevelCredText, SV2_BackToLauncher;
-SV2Img SV2_Months[12]; /* Jan..Dec */
+SV2Img SV2_Months[12]; /* Jan..Dec. */
 
-/* Glass panels: 14 stat glasses + Console/LoadSave/SaveChanges/Extra */
+/* Glass panels: 14 stat glasses + Console/LoadSave/SaveChanges/Extra. */
 #define SV2_GLASS_COUNT 18
 typedef struct {
-    const char *name;      /* matches SaveFile proficiency name, or a UI id */
+    const char *name;      /* matches SaveFile proficiency name, or a UI id. */
     const char *resNormal;
     const char *resInverted;
     SV2Img normal, inverted;
@@ -2954,23 +2712,21 @@ SV2Glass SV2_Glasses[SV2_GLASS_COUNT] = {
     {"Crafting",              "SV2_CRAFTING_GLASS",          "SV2_CRAFTING_GLASS_INV",          {0}, {0}, 1076, 315},
     {"Espionage",             "SV2_ESPIONAGE_GLASS",         "SV2_ESPIONAGE_GLASS_INV",         {0}, {0}, 1692, 494},
     {"Stealth",               "SV2_STEALTH_GLASS",           "SV2_STEALTH_GLASS_INV",           {0}, {0}, 1316, 157},
-    /* Non-stat UI glass panels - no editable number, click-only */
+    /* Non-stat UI glass panels. */
     {"__console",             "SV2_CONSOLE_GLASS",           "SV2_CONSOLE_GLASS_INV",           {0}, {0}, 0, 0},
     {"__loadsave",            "SV2_LOAD_SAVE_GLASS",         "SV2_LOAD_SAVE_GLASS_INV",         {0}, {0}, 0, 0},
     {"__savechanges",         "SV2_SAVE_CHANGES_GLASS",      "SV2_SAVE_CHANGES_GLASS_INV",      {0}, {0}, 0, 0},
     {"__extra",               "SV2_EXTRA_GLASS",             "SV2_EXTRA_GLASS_INV",             {0}, {0}, 0, 0},
 };
 
-/* ---- Adjustable layout system: drag to reposition, scroll wheel to
-   resize, dump to console to get paste-ready values back. Replaces the
-   fixed #defines below for everything worth hand-tuning interactively. */
+/* ---- Adjustable layout system: drag to reposition, scroll wheel to resize, dump to. */
 typedef struct {
     const char *name;
     double cx, cy;
     double angle;
     BOOL hasAngle;
-    double fontPx;    /* base size at scale=1.0 */
-    BOOL isBand;      /* TIME/LED: dragging Y shifts the whole top/bottom band */
+    double fontPx;    /* base size at scale=1.0. */
+    BOOL isBand;      /* TIME/LED: dragging Y shifts the whole top/bottom band. */
 } SV2LayoutItem;
 
 enum {
@@ -2994,13 +2750,12 @@ SV2LayoutItem SV2_LayoutItems[SV2_LI_COUNT] = {
 
 double SV2_TimeTop = 334, SV2_TimeBottom = 766;
 double SV2_LedTop = 335, SV2_LedBottom = 766;
-double SV2_StatNumFontPx = 22; /* shared base size for all 14 stat numbers */
+double SV2_StatNumFontPx = 22; /* shared base size for all 14 stat numbers. */
 
 #define SV2_MISSION_SHADOW_DX 8
 #define SV2_MISSION_SHADOW_DY 8
 
-/* Accessor macros so the rest of the code can keep reading these as
-   simple names, now backed by the adjustable array. */
+/* Accessor macros so the rest of the code can keep reading these as simple names, now. */
 #define SV2_LEVEL_NUM_CX SV2_LayoutItems[SV2_LI_LEVELNUM].cx
 #define SV2_LEVEL_NUM_CY SV2_LayoutItems[SV2_LI_LEVELNUM].cy
 #define SV2_CRED_NUM_CX SV2_LayoutItems[SV2_LI_CREDNUM].cx
@@ -3027,12 +2782,12 @@ double SV2_StatNumFontPx = 22; /* shared base size for all 14 stat numbers */
 
 
 HWND SV2_hMainWnd = NULL;
-#define SV2_COLORKEY RGB(255, 3, 253) /* deliberately unusual magenta - won't collide with real text/UI colors */
+#define SV2_COLORKEY RGB(255, 3, 253) /* deliberately unusual magenta. */
 HWND SV2_hSaveLocBtn = NULL, SV2_hBackBtn = NULL;
 int SV2_HoveredGlass = -1;
-GpImage *SV2_ScreenshotMasked = NULL; /* pre-masked to Image.png's alpha shape */
+GpImage *SV2_ScreenshotMasked = NULL; /* pre-masked to Image.png's alpha shape. */
 
-/* LED scroll state */
+/* LED scroll state. */
 double SV2_LedScrollY = 0;
 DWORD SV2_LedLastTick = 0;
 #define SV2_LED_SPEED_PX_PER_SEC 60.0
@@ -3041,8 +2796,7 @@ HDC SV2_MemDC = NULL;
 HBITMAP SV2_MemBmp = NULL;
 int SV2_MemW = 0, SV2_MemH = 0;
 
-/* ---- helpers (image loading, bbox, layout) reuse the same approach as
-   the main menu (MENU_LoadPngResource / MENU_ComputeBBox / etc). ---- */
+/* ---- helpers (image loading, bbox, layout) reuse the same approach as the main menu. */
 
 void SV2_LoadImg(SV2Img *m, const char *resourceName) {
     m->img = MENU_LoadPngResource(resourceName);
@@ -3091,7 +2845,7 @@ BOOL SV2_PtInBBox(int nx, int ny, RECT *b) {
     return (nx >= b->left && nx < b->right && ny >= b->top && ny < b->bottom);
 }
 
-/* ---- screenshot: masked into Image.png's alpha shape once per load ---- */
+/* ---- screenshot: masked into Image.png's alpha shape once per load ----. */
 
 void SV2_BuildMaskedScreenshot(GpImage *screenshot) {
     if (SV2_ScreenshotMasked) { GdipDisposeImage(SV2_ScreenshotMasked); SV2_ScreenshotMasked = NULL; }
@@ -3104,10 +2858,7 @@ void SV2_BuildMaskedScreenshot(GpImage *screenshot) {
     GpBitmap *result = NULL;
     GdipCreateBitmapFromScan0(w, h, 0, PixelFormat32bppARGB, NULL, &result);
 
-    /* Draw the screenshot (scaled to fill the mask's bbox) into a temp
-       buffer, then the mask on top using a raster op that keeps only
-       where the mask has alpha - simplest reliable way with the flat
-       GDI+ API is a manual per-pixel combine. */
+    /* Draw the screenshot (scaled to fill the mask's bbox) into a temp buffer, then the mask on. */
     GpBitmap *shotScaled = NULL;
     GdipCreateBitmapFromScan0(w, h, 0, PixelFormat32bppARGB, NULL, &shotScaled);
     GpGraphics *sg = NULL;
@@ -3146,7 +2897,7 @@ void SV2_BuildMaskedScreenshot(GpImage *screenshot) {
 
 
 /* ------------------------------------------------------------------ */
-/* Save editor v2: init, paint, interaction                            */
+/* Save editor v2: init, paint, interaction. */
 /* ------------------------------------------------------------------ */
 
 #define SV2_TIMER_ANIM 960
@@ -3159,8 +2910,8 @@ int SV2_MonthFromSaveInfo(void) {
     return (int)st.wMonth;
 }
 
-int SV2_EditBoxGlassIndex[MAX_PROFICIENCIES]; /* which SV2_Glasses[] slot each SE_hEditBoxes[i] maps to, -1 if none */
-int SV2_LevelBoxIsHovered = 0; /* unused placeholder for symmetry - level/cred aren't on a hoverable glass */
+int SV2_EditBoxGlassIndex[MAX_PROFICIENCIES]; /* which SV2_Glasses[] slot each SE_hEditBoxes[i] maps to, -1 if none. */
+int SV2_LevelBoxIsHovered = 0; /* unused placeholder for symmetry. */
 
 HWND SV2_hLevelCredCaptionOverlay = NULL;
 
@@ -3175,20 +2926,11 @@ void SV2_UpdateCaptionOverlay(SV2Layout L) {
     int w = (int)((b.right - b.left) * L.scale);
     int h = (int)((b.bottom - b.top) * L.scale);
     int x = SV2_MapX(L, b.left);
-    /* No longer shifted down by its own height - that offset was tuned by
-       eye while the screen-coordinate bug above was still present, so it
-       was compensating for the overlay being in the wrong place rather
-       than reflecting an intentional design offset. With positioning now
-       correct, the natural mapped top position is where it belongs. */
+    /* No longer shifted down by its own height. */
     int y = SV2_MapY(L, b.top);
     if (w <= 0 || h <= 0) return;
 
-    /* x,y above are client-area-relative (same convention as every other
-       SV2_Map* call in this app). This overlay is a WS_POPUP window
-       though, which positions in SCREEN coordinates - without this
-       conversion the overlay was always created/moved near the screen
-       origin, which happens to sit on the primary monitor, so it never
-       tracked the main window when it lived on a different monitor. */
+    /* x,y above are client-area-relative (same convention as every other SV2_Map* call in this app) */
     POINT scr = { x, y };
     ClientToScreen(SV2_hMainWnd, &scr);
     int sx = scr.x, sy = scr.y;
@@ -3207,7 +2949,7 @@ void SV2_UpdateCaptionOverlay(SV2Layout L) {
     ZeroMemory(&bmi, sizeof(bmi));
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth = w;
-    bmi.bmiHeader.biHeight = -h; /* top-down */
+    bmi.bmiHeader.biHeight = -h; /* top-down. */
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
@@ -3218,13 +2960,12 @@ void SV2_UpdateCaptionOverlay(SV2Layout L) {
     GpGraphics *g = NULL;
     GdipCreateFromHDC(memDC, &g);
     GdipSetInterpolationMode(g, InterpolationModeBilinear);
-    GdipSetCompositingMode(g, CompositingModeSourceCopy); /* keep real alpha, don't blend onto garbage bg */
+    GdipSetCompositingMode(g, CompositingModeSourceCopy); /* keep real alpha, don't blend onto garbage bg. */
     GdipDrawImageRectRectI(g, SV2_LevelCredText.img, 0, 0, w, h,
         b.left, b.top, b.right - b.left, b.bottom - b.top, UnitPixel, NULL, NULL, NULL);
     GdipDeleteGraphics(g);
 
-    /* UpdateLayeredWindow with ULW_ALPHA requires premultiplied alpha -
-       GDI+ doesn't produce that automatically, so multiply it in by hand. */
+    /* UpdateLayeredWindow with ULW_ALPHA requires premultiplied alpha. */
     UINT32 *px = (UINT32 *)bits;
     for (int i = 0; i < w * h; i++) {
         BYTE a = (BYTE)((px[i] >> 24) & 0xFF);
@@ -3277,52 +3018,28 @@ void SV2_InitOnce(void) {
 
 }
 
-/* Repositions the SAME edit boxes SE_BuildProficiencyFields() already
-   created and correctly bound to SE_g_save.proficiencies[] - reusing
-   that proven data-binding rather than standing up a parallel one.
-   Called after SE_BuildProficiencyFields() on every load/resize. */
+/* Repositions the SAME edit boxes SE_BuildProficiencyFields() already created and correctly. */
 int SV2_ActiveEditBox = -1; /* proficiency index currently shown as a real edit box, -1 = none (all drawn as text) */
 
 #define SV2_MSG_DEFERRED_HIDE (WM_APP + 137)
 
 LRESULT CALLBACK SV2_EditBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
                                           UINT_PTR subclassId, DWORD_PTR refData) {
-    if (msg == WM_ERASEBKGND) return 1; /* suppress entirely - no flash on invalidate */
+    if (msg == WM_ERASEBKGND) return 1; /* suppress entirely. */
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {
-        /* Enter confirms: shift focus away, which triggers WM_KILLFOCUS
-           below and closes the edit normally - same effect as clicking
-           off, just via the keyboard. Consuming the key here (returning 0
-           instead of passing it to the default edit proc) also prevents
-           whatever default single-line-edit handling of Enter was
-           producing the error beep. */
+        /* Enter confirms: shift focus away, which triggers WM_KILLFOCUS below and closes the edit. */
         SetFocus(SV2_hMainWnd);
         return 0;
     }
-    if (msg == WM_CHAR && wParam == VK_RETURN) return 0; /* swallow the matching WM_CHAR too */
+    if (msg == WM_CHAR && wParam == VK_RETURN) return 0; /* swallow the matching WM_CHAR too. */
     if (msg == WM_KILLFOCUS) {
-        /* Editing finished - hide again and go back to drawn-text display,
-           which is what actually eliminates the flicker (no always-present
-           transparent window left overlapping the glass art). Deferred via
-           PostMessage rather than done synchronously here: changing this
-           window's own visibility from inside its own focus-loss handler
-           is a re-entrant visibility change that was likely the actual
-           source of the beep - posting it lets the focus transition
-           finish cleanly first. */
+        /* Editing finished. */
         if (GetDlgCtrlID(hwnd) - SE_ID_FIRST_EDIT == SV2_ActiveEditBox) {
             PostMessage(hwnd, SV2_MSG_DEFERRED_HIDE, 0, 0);
         }
     }
     if (msg == SV2_MSG_DEFERRED_HIDE) {
-        /* This message is POSTED (async) from WM_KILLFOCUS above, so it can
-           sit in the queue briefly before running. If the user clicks a
-           DIFFERENT box before it runs, that newer activation already sets
-           SV2_ActiveEditBox to the new index and shows/hides the right
-           boxes - by the time this fires it would be stale, and must not
-           touch SV2_ActiveEditBox in that case (doing so unconditionally
-           was the root cause of a real, confirmed bug: it desynced the
-           app's internal "what's being edited" tracking from what was
-           actually focused on screen). Only act if this box is still the
-           one the app considers active. */
+        /* This message is POSTED (async) from WM_KILLFOCUS above, so it can sit in the queue. */
         if (GetDlgCtrlID(hwnd) - SE_ID_FIRST_EDIT == SV2_ActiveEditBox) {
             ShowWindow(hwnd, SW_HIDE);
             SV2_ActiveEditBox = -1;
@@ -3348,15 +3065,7 @@ void SV2_RepositionStatBoxes(HWND hwnd) {
     int credFontPx = (int)(SV2_LayoutItems[SV2_LI_CREDNUM].fontPx * L.scale); if (credFontPx < 10) credFontPx = 10;
     int statFontPx = (int)(SV2_StatNumFontPx * L.scale); if (statFontPx < 6) statFontPx = 6;
 
-    /* Cache these instead of creating (and leaking) fresh HFONTs on every
-       single call - this function runs on every activation (every click),
-       and font creation isn't free. Also, WM_SETFONT below uses FALSE for
-       its redraw parameter now instead of TRUE: MoveWindow's own TRUE
-       redraw flag already forces the necessary repaint once the window's
-       final position/font are both set, so having WM_SETFONT ALSO force
-       an immediate redraw was making each box - especially the one being
-       newly shown - paint twice in quick succession instead of once,
-       causing a visible flash at the moment of activation. */
+    /* Cache these instead of creating (and leaking) fresh HFONTs on every single call. */
     static int s_cachedLevelPx = -1, s_cachedCredPx = -1, s_cachedStatPx = -1;
     static HFONT s_levelFont = NULL, s_credFont = NULL, s_statFont = NULL;
     if (levelFontPx != s_cachedLevelPx) {
@@ -3391,17 +3100,7 @@ void SV2_RepositionStatBoxes(HWND hwnd) {
         }
         SetWindowSubclass(SE_hEditBoxes[i], SV2_EditBoxSubclassProc, 1, 0);
 
-        /* GDI's native EDIT control and DirectWrite center text vertically
-           using different font-metric conventions (line-gap/ascent-descent
-           handling differs between the two), so the edit box's geometric
-           center doesn't land exactly where the DirectWrite-drawn number
-           sits - the number appears to jump up slightly the instant a box
-           becomes active. Nudged down by a small FIXED pixel amount
-           (scaled only by L.scale, not by font size - the underlying
-           mismatch is a roughly constant number of pixels regardless of
-           font size, not proportional to it, so a flat offset is the
-           correct model rather than scaling with font size). Still an
-           empirical value and may need further adjustment. */
+        /* GDI's native EDIT control and DirectWrite center text vertically using different. */
         int yNudge = (int)(3 * L.scale);
 
         if (strcmp(SE_g_save.proficiencies[i].name, "Level") == 0) {
@@ -3428,13 +3127,7 @@ void SV2_RepositionStatBoxes(HWND hwnd) {
                 MoveWindow(SE_hEditBoxes[i], SV2_MapX(L, SV2_Glasses[gi].numCx) - statW / 2,
                     SV2_MapY(L, SV2_Glasses[gi].numCy) - statH / 2 + yNudge, statW, statH, TRUE);
                 SendMessageA(SE_hEditBoxes[i], WM_SETFONT, (WPARAM)statFont, FALSE);
-                /* Hidden by default - displayed as drawn text instead - and
-                   only shown as a real window while actively being edited.
-                   This was the actual cause of the persistent flicker: any
-                   transparent, always-visible native window overlapping
-                   glass art needs to repaint whenever anything nearby
-                   invalidates, no matter how the transparency itself was
-                   implemented. */
+                /* Hidden by default. */
                 ShowWindow(SE_hEditBoxes[i], (i == SV2_ActiveEditBox) ? SW_SHOW : SW_HIDE);
                 if (i == SV2_ActiveEditBox) BringWindowToTop(SE_hEditBoxes[i]);
                 SV2_EditBoxGlassIndex[i] = gi;
@@ -3491,7 +3184,7 @@ BOOL SV2_GlassContainsPoint(int idx, int nx, int ny) {
     if (!m->valid) return FALSE;
     RECT b = m->bbox;
     if (nx < b.left || nx >= b.right || ny < b.top || ny >= b.bottom) return FALSE;
-    if (!SV2_GlassAlphaMask[idx]) return TRUE; /* fallback if mask build failed */
+    if (!SV2_GlassAlphaMask[idx]) return TRUE; /* fallback if mask build failed. */
     int w = b.right - b.left;
     return SV2_GlassAlphaMask[idx][(ny - b.top) * w + (nx - b.left)] > 20;
 }
@@ -3522,14 +3215,7 @@ void SV2_OnMouseMove(HWND hwnd, int sx, int sy) {
             (hit >= 0 && !SV2_Glasses[hit].inverted.valid) ? " [NO INVERTED IMAGE LOADED]" : "");
         AppendStatus(msg);
 
-        /* Skip the repaint trigger (but still update the hover state
-           above) while a stat number is actively being edited - this is
-           the other source of continuous D2D repaint pressure under the
-           visible native edit-box HWND, alongside the LED timer tick
-           (already gated in WM_TIMER). Mouse jitter right at a glass
-           boundary can fire this repeatedly while the mouse is still
-           sitting near the glass that was just clicked, which is exactly
-           the situation right after activating an edit box. */
+        /* Skip the repaint trigger (but still update the hover state above) while a stat number is. */
         extern int SV2_ActiveEditBox;
         if (SV2_ActiveEditBox >= 0) return;
 
@@ -3560,7 +3246,7 @@ void SV2_ActivateEditBox(HWND hwnd, int proficiencyIndex) {
         ShowWindow(SE_hEditBoxes[SV2_ActiveEditBox], SW_HIDE);
     }
     SV2_ActiveEditBox = proficiencyIndex;
-    SV2_RepositionStatBoxes(hwnd); /* shows the newly-active box at the right position/font */
+    SV2_RepositionStatBoxes(hwnd); /* shows the newly-active box at the right position/font. */
     if (SE_hEditBoxes[proficiencyIndex]) {
         SetFocus(SE_hEditBoxes[proficiencyIndex]);
         SendMessageA(SE_hEditBoxes[proficiencyIndex], EM_SETSEL, 0, -1);
@@ -3585,8 +3271,7 @@ void SV2_OnLButtonDown(HWND hwnd, int sx, int sy) {
         return;
     }
 
-    /* Level/Cred: no glass panel to hit-test against, just check proximity
-       to their drawn-text position. */
+    /* Level/Cred: no glass panel to hit-test against, just check proximity to their drawn-text. */
     extern SaveFile SE_g_save;
     double distLevel = sqrt(pow(nx - SV2_LEVEL_NUM_CX, 2) + pow(ny - SV2_LEVEL_NUM_CY, 2));
     double distCred = sqrt(pow(nx - SV2_CRED_NUM_CX, 2) + pow(ny - SV2_CRED_NUM_CY, 2));
@@ -3608,8 +3293,7 @@ void SV2_OnLButtonDown(HWND hwnd, int sx, int sy) {
         extern void SE_LoadSaveFile(void);
         if (SE_BrowseForSaveFile()) {
             SE_LoadSaveFile();
-            SV2_RepositionStatBoxes(hwnd); /* SE_LoadSaveFile() rebuilds the edit boxes at the OLD
-                                               system's positions internally - must re-skin them */
+            SV2_RepositionStatBoxes(hwnd); /* SE_LoadSaveFile() rebuilds the edit boxes at the OLD system's positions internally. */
             SV2_PopulateFromSave();
             InvalidateRect(hwnd, NULL, TRUE);
         }
@@ -3622,7 +3306,7 @@ void SV2_OnLButtonDown(HWND hwnd, int sx, int sy) {
         gMB_ConsoleVisible = !gMB_ConsoleVisible;
         MENU_UpdateConsoleVisibility(hwnd);
     } else if (SV2_Glasses[hit].name[0] != '_') {
-        /* A real stat glass - activate its edit box for editing. */
+        /* A real stat glass. */
         for (int p = 0; p < SE_g_save.proficiencyCount; p++) {
             if (strcmp(SE_g_save.proficiencies[p].name, SV2_Glasses[hit].name) == 0) {
                 SV2_ActivateEditBox(hwnd, p);
@@ -3630,7 +3314,7 @@ void SV2_OnLButtonDown(HWND hwnd, int sx, int sy) {
             }
         }
     }
-    /* __extra: reserved, no action defined yet */
+    /* __extra: reserved, no action defined yet. */
 }
 
 BOOL SV2_Tick(HWND hwnd) {
@@ -3646,13 +3330,7 @@ BOOL SV2_Tick(HWND hwnd) {
 }
 
 
-/* Safe getters for the D2D test path (d2d_phase3_text.c) to read the
-   Level/Cred display values without needing to mirror SaveFile's actual
-   struct layout across a translation unit boundary - these live here,
-   in the same file that already has the real definitions, and just
-   expose the two specific strings as plain C strings. Returns NULL if
-   that field is currently shown as a real focused edit box instead of
-   drawn text (matching the same skip-if-active check the D2D paint path uses). */
+/* Safe getters for the D2D test path (d2d_phase3_text.c) to read the Level/Cred display. */
 const char *SV2_D2D_GetLevelNumText(void) {
     static char buf[16];
     for (int p = 0; p < SE_g_save.proficiencyCount; p++) {
@@ -3674,12 +3352,7 @@ const char *SV2_D2D_GetCredNumText(void) {
     return NULL;
 }
 
-/* Same pattern as the two getters above, but for the per-glass stat
-   numbers (SV2_GLASS_COUNT of them). glassIndex is an index into
-   SV2_Glasses[]/proficiencies matched by name - returns NULL if that
-   glass has no proficiency value or is currently a real focused edit
-   box. outCx/outCy/outHovered are always filled in (even on NULL text)
-   so the caller has the position/hover-color info either way. */
+/* Same pattern as the two getters above, but for the per-glass stat numbers. */
 const char *SV2_D2D_GetGlassNumText(int glassIndex, double *outCx, double *outCy, BOOL *outHovered) {
     static char buf[16];
     if (glassIndex < 0 || glassIndex >= SV2_GLASS_COUNT) return NULL;
@@ -3705,16 +3378,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             char defaultPath[MAX_PATH];
             snprintf(defaultPath, sizeof(defaultPath), "%s\\archive\\pc\\mod", GAME_ROOT);
 
-            /* Hidden - purely storage for the configured mods folder path,
-               set via the "Mod Folder" button's browse dialog and read by
-               the conflict scanner / deploy step. No longer a visible
-               control now that the UI is fully image-based. */
+            /* Hidden - purely storage for the configured mods folder path, set via the "Mod Folder". */
             hPathBox = CreateWindowA("EDIT", defaultPath,
                 WS_CHILD | ES_AUTOHSCROLL,
                 0, 0, 10, 10, hwnd, (HMENU)ID_PATH_BOX, NULL, NULL);
 
-            /* "Console" - the launcher's log, now toggled by Button 6
-               instead of always being visible. */
+            /* "Console" - the launcher's log, now toggled by Button 6 instead of always being visible. */
             hStatusText = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                 20, 170, 700, 500, hwnd, (HMENU)ID_STATUS_TEXT, NULL, NULL);
@@ -3737,9 +3406,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             if (gSaveEditorActivated) {
-                SE_WndProc(hwnd, WM_SIZE, wParam, lParam); /* rebuilds SE_hEditBoxes[] data binding */
+                SE_WndProc(hwnd, WM_SIZE, wParam, lParam); /* rebuilds SE_hEditBoxes[] data binding. */
                 if (gViewMode == MODE_SAVEEDITOR) {
-                    SV2_RepositionStatBoxes(hwnd); /* re-skins those same boxes to SV2's layout */
+                    SV2_RepositionStatBoxes(hwnd); /* re-skins those same boxes to SV2's layout. */
                     InvalidateRect(hwnd, NULL, FALSE);
                 }
             }
@@ -3747,14 +3416,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_WINDOWPOSCHANGED:
-            /* The caption overlay is a real top-level (WS_POPUP) window
-               using absolute screen coordinates, not a true child window -
-               it doesn't move automatically with the parent the way a
-               child would, so moving the app to a different monitor left
-               it stranded until something explicitly repositioned it.
-               WM_WINDOWPOSCHANGED catches this more reliably than WM_MOVE
-               alone (maximize/snap/keyboard-driven monitor moves don't
-               always generate a plain WM_MOVE). */
+            /* The caption overlay is a real top-level (WS_POPUP) window using absolute screen. */
             if (gSaveEditorActivated && gViewMode == MODE_SAVEEDITOR) {
                 SV2_RepositionStatBoxes(hwnd);
             }
@@ -3787,10 +3449,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_ERASEBKGND:
-            /* MENU_Paint fills the entire client area itself (offscreen,
-               then blitted), and the save editor's D2D path clears+draws
-               its own full surface - erasing here first would just cause
-               visible flicker for nothing. */
+            /* MENU_Paint fills the entire client area itself (offscreen, then blitted), and the save. */
             return 1;
 
         case WM_MOUSEMOVE:
@@ -3812,9 +3471,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CTLCOLOREDIT: {
             if (gSaveEditorActivated) {
                 if (gViewMode == MODE_SAVEEDITOR) {
-                    /* Transparent so the glass art shows through; text
-                       turns white when the corresponding glass panel is
-                       hovered, matching the inverted-glass look. */
+                    /* Transparent so the glass art shows through. */
                     HWND hCtl = (HWND)lParam;
                     int ctlId = GetDlgCtrlID(hCtl);
                     if (ctlId >= SE_ID_FIRST_EDIT) {
@@ -3842,9 +3499,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 gMB_ConsoleVisible = FALSE;
                 MENU_UpdateConsoleVisibility(hwnd);
             } else if (gSaveEditorActivated && HIWORD(wParam) == EN_CHANGE) {
-                /* EN_CHANGE repaint-on-edit (avoids ghosting on the
-                   transparent boxes) still needs SE_WndProc's handling,
-                   regardless of which skin is active. */
+                /* EN_CHANGE repaint-on-edit (avoids ghosting on the transparent boxes) still needs. */
                 SE_WndProc(hwnd, msg, wParam, lParam);
             }
             break;
@@ -3863,15 +3518,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     InvalidateRect(hwnd, NULL, FALSE);
                 } else if (gViewMode == MODE_SAVEEDITOR) {
                     BOOL animated = SV2_Tick(hwnd);
-                    /* SV2_Tick still runs either way (keeps LED's scroll
-                       position correct for when editing ends), but the
-                       resulting full-window invalidate is skipped while a
-                       stat number is actively being edited - that's the
-                       one moment a real native edit-box HWND is visible on
-                       top of the D2D surface, and forcing this surface to
-                       fully repaint 66 times/sec underneath a visible
-                       child window causes visible flashing/jitter during
-                       active editing. */
+                    /* SV2_Tick still runs either way (keeps LED's scroll position correct for when editing ends) */
                     extern int SV2_ActiveEditBox;
                     if (animated && SV2_ActiveEditBox < 0) {
                         InvalidateRect(hwnd, NULL, FALSE);
@@ -3892,14 +3539,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    /* Must be declared before any window is created - the save editor's
-       pixel-precise layout depends on this (without it, Windows silently
-       virtualizes the app into a scaled-down coordinate space at DPI
-       scales above 100%, then stretches the rendered output afterward). */
+    /* Must be declared before any window is created. */
     SetProcessDPIAware();
 
-    /* Fresh log file each run (truncated, not appended-forever) so old
-       sessions don't pile up and confuse things. */
+    /* Fresh log file each run (truncated, not appended-forever) so old sessions don't pile up. */
     {
         char logPath[MAX_PATH];
         GetModuleFileNameA(NULL, logPath, MAX_PATH);
@@ -3920,9 +3563,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     icex.dwICC = ICC_WIN95_CLASSES;
     InitCommonControlsEx(&icex);
 
-    /* One-time save editor setup: GDI+, its font, and its embedded artwork
-       resources. Its actual controls are created lazily the first time
-       "Edit Saves" is clicked. */
+    /* One-time save editor setup: GDI+, its font, and its embedded artwork resources. */
     SE_InitOnce(hInstance);
     SV2_InitOnce();
 
