@@ -1,3 +1,4 @@
+// Mod made by Realbiquitous
 /* Direct2D renderer for the main menu screen. */
 #define COBJMACROS
 #define CINTERFACE
