@@ -1,4 +1,4 @@
-/* * CyberpunkCustomLauncherGUI_v4. */
+// Mod made by Realbiquitous
 
 #include <windows.h>
 #include <commctrl.h>
