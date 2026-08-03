@@ -1,3 +1,4 @@
+// Mod made by Realbiquitous
 /* Direct2D save-editor renderer. */
 #define COBJMACROS
 #define CINTERFACE
