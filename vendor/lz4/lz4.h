@@ -1,3 +1,4 @@
+// Mod made by Realbiquitous
 /*
  *  LZ4 - Fast LZ compression algorithm
  *  Header File
